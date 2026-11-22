@@ -337,3 +337,13 @@ input.code { width: 100%; }
 .opp-table tr.sub td:first-child { padding-left: 24px; }
 .opp-table tr.total td { border-top: 2px solid var(--border-2); }
 .analysis .check { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; }
+
+/* ---- research ---- */
+.research > * + * { margin-top: 16px; }
+.funnel th { width: 190px; font-size: 13px; color: var(--ink); font-weight: 550; }
+.funnel-cell { width: 100%; min-width: 120px; }
+.funnel-bar { height: 8px; background: var(--wash-2); border-radius: 999px; overflow: hidden; }
+.funnel-fill { height: 100%; min-width: 2px; background: var(--custom); border-radius: 0 4px 4px 0; }
+td.reason { max-width: 46ch; overflow-wrap: anywhere; }
+td.mono { font-family: var(--mono, ui-monospace, monospace); font-size: 12px; overflow-wrap: anywhere; max-width: 36ch; }
+.funnel td.hint, .funnel td.num { white-space: nowrap; }

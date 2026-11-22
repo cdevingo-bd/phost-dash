@@ -6,9 +6,10 @@ import { state, refreshCatalog, refreshSaved } from "./state.js";
 import { mountStudio, openJob, showRun } from "./studio.js";
 import { mountBuild } from "./build.js";
 import { mountResults } from "./results.js";
+import { mountResearch } from "./research.js";
 import { mountHelp } from "./help.js";
 
-const TABS = [["studio", "Studio", "play"], ["build", "Build", "layers"], ["results", "Results", "trophy"], ["guide", "Guide", "help"]];
+const TABS = [["studio", "Studio", "play"], ["build", "Build", "layers"], ["results", "Results", "trophy"], ["research", "Research", "target"], ["guide", "Guide", "help"]];
 const mounted = {};
 let current = null;
 
@@ -92,6 +93,7 @@ async function boot() {
   mounted.studio = mountStudio($("#tab-studio"), go);
   mounted.build = mountBuild($("#tab-build"), go);
   mounted.results = mountResults($("#tab-results"), go);
+  mounted.research = mountResearch($("#tab-research"), go);
   mounted.guide = mountHelp($("#tab-guide"), go);
   show(location.hash.slice(1) || "studio");
   refreshHeader();

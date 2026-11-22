@@ -5,7 +5,7 @@ stage of the simulation step), run it beside native on your own GPU, time it, an
 work itself: [phost-lab](https://github.com/cdevingo-bd/phost-lab)'s workers do.
 
 ```
-# from clones of phost, phost-coupledchol, phost-lab, phost-author, phost-score and this repo (see the phost README):
+# from clones of phost, phost-coupledchol, phost-lab, phost-author, phost-score and this repo (see the phost README; phost-agent is optional):
 pip install -e ../phost -e ../phost-coupledchol -e ../phost-lab -e ../phost-author -e ../phost-score -e .
 phost-dash
 ```
@@ -16,7 +16,7 @@ and a CUDA GPU to run anything.
 
 ## What is in it
 
-Four screens, in the order you use them:
+Five screens, in the order you use them:
 
 - **Studio**: pick a scene and an experiment and press *Run comparison*. The same scene is run twice from the same
   settled state, the reference on the left and your experiment on the right (or laid over each other), drawn as it is
@@ -36,6 +36,11 @@ Four screens, in the order you use them:
 - **Results**: the leaderboard, grouped so only like is compared with like, with the best trade-offs marked and the trust
   level of every row (a row can be re-run here and compared with what was recorded), and a history of everything that
   ran. Opening a past watched run replays its saved stream.
+- **Research**: what an agent run by [phost-agent](https://github.com/cdevingo-bd/phost-agent) has done on this machine, read from
+  its journal in the state directory: where proposals stopped (a funnel from *proposed* to *a win*), how many were answered from the
+  memo without running anything, the device time and tokens spent, the latest attempts and finished searches, who holds each device,
+  and whether the journal's hash chain is intact. It only reads: start a search with `phost-agent run`. Needs `pip install phost-agent`
+  (`phost-dash[research]`) and says so when it is missing.
 - **Guide**: what the words mean and what the numbers are worth.
 
 The built-in scene is `tank:boat`: a glass tank that shuttles side to side, a boat with a cloth sail and three crates on
@@ -73,7 +78,7 @@ phost-dash --plugin my_stages --scene-dir ./my-scenes      # your own stages and
 
 ```
 pip install -e '.[test]'
-pytest                      # ~230 tests with a fake runner: security, stores, jobs, HTTP, and the page itself
+pytest                      # ~290 tests with a fake runner: security, stores, jobs, HTTP, and the page itself
 pytest tests/test_real_gpu.py   # the same over real GPU runs (skipped without CUDA)
 ```
 

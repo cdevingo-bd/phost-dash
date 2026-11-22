@@ -17,6 +17,7 @@ from typing import Any, Callable, Mapping
 from phost import ContractError, Registry
 from phost_lab import NATIVE, GraphSpec
 from phost_lab.bootstrap import load_registry, load_scenes
+from phost_lab.engine import require_capability, supports
 from phost_lab.isolate import run_isolated
 from phost_lab.runner import RunConfig, comparable_to_native, stage_classes
 from phost_score import Entry, Ledger, SELF_REPORTED, leaderboard, make_entries, reverify
@@ -28,7 +29,7 @@ from .store import NotFound, Store, StoreError
 
 OPTIONAL_PLUGINS = ("phost_author.expression_impls", "phost_coupledchol.phost_impl")
 MAX_WORLDS, MAX_STEPS, MAX_SOURCE, MAX_LIVE_STEPS = 4096, 2000, 200_000, 5000
-PACKAGES = ("phost", "phost-lab", "phost-score", "phost-dash", "phost-author", "phost-coupledchol", "mujoco",
+PACKAGES = ("phost", "phost-lab", "phost-score", "phost-dash", "phost-author", "phost-agent", "phost-coupledchol", "mujoco",
             "mujoco-warp", "warp-lang", "numpy")
 
 
@@ -98,6 +99,17 @@ class App:
     def _can_render(self) -> bool:
         return installed("mujoco")
 
+    def research(self) -> dict:
+        """What the agent layer (phost-agent) has done on this machine: the funnel its proposals went through, what its memo
+        saved, what it spent, who holds each device, and whether its journal is intact. Read-only: a search is started with
+        ``phost-agent run``, which writes the journal under this dashboard's state directory by default."""
+        if not installed("phost_agent"):
+            return dict(installed=False)
+        from phost_agent import Journal, overview
+        agent = self.config.state / "agent"
+        return dict(installed=True, journal=str(agent / "journal.jsonl"),
+                    **overview(Journal(agent / "journal.jsonl"), lease_dir=agent / "leases"))
+
     def catalog(self) -> dict:
         return dict(registry=self.registry().describe(), scenes=self.scenes().describe(), plugins=list(self.plugins))
 
@@ -128,9 +140,12 @@ class App:
         return graph
 
     @staticmethod
-    def _need_mujoco(scene, what: str) -> None:
-        if scene.engine != "mjwarp":
-            raise ApiError(400, f"{what} needs MuJoCo; scene {scene.id!r} runs on the {scene.engine!r} engine")
+    def _need(scene, capability: str, what: str) -> None:
+        """Refuse a tool the scene's engine does not offer (the lab says which engines do)."""
+        try:
+            require_capability(scene, capability, what)
+        except ContractError as error:
+            raise ApiError(400, str(error)) from None
 
     def validate(self, body: Mapping[str, Any]) -> dict:
         registry = self.registry()
@@ -241,7 +256,7 @@ class App:
             raise ApiError(400, f"steps is a whole number between 1 and {MAX_STEPS}")
         scene = scenes.get(scene_id)
         graph = self._for_scene(graph, spec, scene)
-        frames = bool(body.get("frames", True)) and not scene.hidden and scene.engine == "mjwarp"      # only MuJoCo scenes are drawn
+        frames = bool(body.get("frames", True)) and not scene.hidden and supports(scene, "render")      # only MuJoCo scenes are drawn as images
         job = self.jobs.submit("run", dict(graph=graph.to_dict(), scene=scene_id, worlds=worlds, steps=steps,
                                            frames=frames))
         return job.summary()
@@ -257,7 +272,7 @@ class App:
             raise ApiError(400, f"no scene {scene_id!r}")
         if scenes.get(scene_id).hidden:
             raise ApiError(403, "a held-out scene is never drawn")
-        self._need_mujoco(scenes.get(scene_id), "the live view")
+        self._need(scenes.get(scene_id), "live", "the live view")
         steps, every = body.get("steps", 300), body.get("every", 6)
         for name, value, high in (("steps", steps, MAX_LIVE_STEPS), ("every", every, 200)):
             if not (isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= high):
@@ -300,7 +315,7 @@ class App:
             raise ApiError(400, f"no scene {scene_id!r}")
         if scenes.get(scene_id).hidden:
             raise ApiError(403, "a held-out scene's timings are never shown")
-        self._need_mujoco(scenes.get(scene_id), "the phase profile")
+        self._need(scenes.get(scene_id), "profile", "the phase profile")
         worlds = body.get("worlds", [1])
         if not (isinstance(worlds, list) and 1 <= len(worlds) <= 3
                 and all(isinstance(w, int) and not isinstance(w, bool) and 1 <= w <= MAX_WORLDS for w in worlds)):

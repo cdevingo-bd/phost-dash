@@ -467,8 +467,26 @@ def test_only_a_mujoco_scene_is_drawn(app, runners):
     assert runners.calls[-1]["frames"]
 
 
-def test_the_live_view_and_the_phase_profile_refuse_a_scene_that_is_not_mujoco(app):
-    live = error_of(app.start_live, dict(graph=stage_graph(), scene="chain32:pluck"))
-    assert live.status == 400 and "needs MuJoCo" in live.message and "'chain'" in live.message
-    profile = error_of(app.start_profile, dict(scene="chain32:pluck"))
-    assert profile.status == 400 and "needs MuJoCo" in profile.message
+def test_the_live_view_and_the_phase_profile_are_offered_for_every_engine_that_has_them(app, runners):
+    app.start_live(dict(graph=stage_graph(), scene="chain32:pluck"))
+    app.start_profile(dict(scene="chain32:pluck"))
+
+
+def test_the_live_view_and_the_phase_profile_refuse_a_scene_whose_engine_does_not_offer_them(config, tmp_path):
+    from phost_dash import App
+    from phost_lab.engine import ENGINES, register_engine
+
+    class Bare:
+        name, doc, suffix, capabilities = "test-bare", "no tools", ".bare", frozenset()
+
+    (tmp_path / "x.bare").write_text("{}")
+    try:
+        register_engine(Bare())
+        bare = App(type(config)(state=config.state, scene_dirs=(str(tmp_path),)), runners={})
+        live = error_of(bare.start_live, dict(graph=stage_graph(), scene="x"))
+        assert live.status == 400 and "the live view is not offered by the 'test-bare' engine" in live.message
+        profile = error_of(bare.start_profile, dict(scene="x"))
+        assert profile.status == 400 and "chain, mjwarp" in profile.message
+        bare.close()
+    finally:
+        ENGINES.pop("test-bare", None)

@@ -13,6 +13,7 @@ dependencies = ["phost", "phost-lab", "phost-score"]
 
 [project.optional-dependencies]
 author = ["phost-author"]
+research = ["phost-agent"]
 test = ["pytest>=7", "websocket-client"]
 
 [project.scripts]

@@ -24,7 +24,7 @@ STATUS = "document.querySelector('[data-test=status]').textContent"
 def page(dash, tmp_path):
     page = Page(tmp_path / "chrome")
     page.goto(dash.url)
-    assert page.wait("document.querySelectorAll('#tabs button').length === 4 && document.querySelectorAll('[data-test=scene] option').length > 0")
+    assert page.wait("document.querySelectorAll('#tabs button').length === 5 && document.querySelectorAll('[data-test=scene] option').length > 0")
     yield page
     page.close()
 
@@ -50,7 +50,7 @@ def watch(page, experiment="native"):
 
 
 def test_every_screen_builds_without_a_script_or_network_error(page):
-    for name in ("build", "results", "guide", "studio"):
+    for name in ("build", "results", "research", "guide", "studio"):
         tab(page, name)
         assert page.eval(f"!document.querySelector('#tab-{name}').hidden && document.querySelector('#tab-{name}').children.length > 0"), name
     assert page.problems == []
@@ -319,3 +319,18 @@ def test_no_screen_scrolls_sideways_on_a_phone_sized_window(page):
         tab(page, name)
         over = page.eval("document.documentElement.scrollWidth - document.documentElement.clientWidth")
         assert over <= 1, (name, over)
+
+
+def test_the_research_tab_shows_the_funnel_the_attempts_and_says_when_nothing_has_run(page, config):
+    pytest.importorskip("phost_agent")
+    tab(page, "research")
+    assert "No searches yet" in page.eval("document.querySelector('#tab-research').textContent")
+    from test_research import seed
+    seed(config.state / "agent" / "journal.jsonl")
+    tab(page, "research")
+    assert page.wait("document.querySelectorAll('#tab-research [data-test=funnel] tr').length === 6", 10)
+    rows = page.eval("[...document.querySelectorAll('#tab-research [data-test=funnel] tr')].map(r => r.children[2].textContent).join(',')")
+    assert rows == "4,4,3,2,2,1"
+    assert page.eval("document.querySelectorAll('#tab-research [data-test=attempts] tbody tr').length") == 4
+    assert "Journal intact" in page.eval("document.querySelector('#tab-research').textContent")
+    assert page.problems == []

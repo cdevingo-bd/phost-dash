@@ -26,6 +26,7 @@ CSP = ("default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline';
 ROUTES = [
     ("GET", r"/api/info", lambda a, m, q, b: a.info()),
     ("GET", r"/api/catalog", lambda a, m, q, b: a.catalog()),
+    ("GET", r"/api/research", lambda a, m, q, b: a.research()),
     ("POST", r"/api/validate", lambda a, m, q, b: a.validate(b)),
     ("GET", r"/api/graphs", lambda a, m, q, b: a.list_graphs()),
     ("GET", r"/api/graphs/([^/]+)", lambda a, m, q, b: a.get_graph(m[1])),

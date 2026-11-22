@@ -44,7 +44,7 @@ def test_a_wrong_token_in_the_address_gets_nothing(dash):
     assert response.status == 401 and response.getheader("Set-Cookie") is None
 
 
-@pytest.mark.parametrize("path", ["/", "/api/info", "/api/catalog", "/api/jobs", "/static/app.js"])
+@pytest.mark.parametrize("path", ["/", "/api/info", "/api/catalog", "/api/research", "/api/jobs", "/static/app.js"])
 def test_nothing_is_served_without_the_token(dash, path):
     response, body = Client(dash, authenticated=False).request("GET", path)
     assert response.status == 401 and b"token" in body
