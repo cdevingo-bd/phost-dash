@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>phost</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="top">
+  <h1>phost</h1>
+  <span class="muted small">runs on this machine's GPU</span>
+  <span class="grow"></span>
+  <span id="gpu-chip" class="chip"><span class="dot"></span><span class="text">GPU …</span></span>
+  <span id="ledger-chip" class="chip"><span class="dot"></span><span class="text">ledger …</span></span>
+  <button id="theme" class="btn small" type="button" title="Switch between the system, light and dark themes">Theme: system</button>
+</header>
+<nav class="tabs" role="tablist" id="tabs"></nav>
+<main>
+  <section id="tab-live" role="tabpanel" hidden></section>
+  <section id="tab-graph" role="tabpanel" hidden></section>
+  <section id="tab-author" role="tabpanel" hidden></section>
+  <section id="tab-board" role="tabpanel" hidden></section>
+  <section id="tab-jobs" role="tabpanel" hidden></section>
+  <p class="footnote" id="footnote"></p>
+</main>
+<div id="tip" role="tooltip" hidden></div>
+<noscript>This page needs JavaScript. Nothing leaves this machine.</noscript>
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>
