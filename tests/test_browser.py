@@ -334,3 +334,71 @@ def test_the_research_tab_shows_the_funnel_the_attempts_and_says_when_nothing_ha
     assert page.eval("document.querySelectorAll('#tab-research [data-test=attempts] tbody tr').length") == 4
     assert "Journal intact" in page.eval("document.querySelector('#tab-research').textContent")
     assert page.problems == []
+
+
+def test_a_contest_is_on_the_research_tab_and_new_entries_reach_the_results_tab_without_a_click(page, dash, config):
+    """`phost-agent arena` writes to the same state while the page is open: Research shows who is in it and what they tried, and the
+    leaderboard picks up an entry recorded from outside the page by itself."""
+    pytest.importorskip("phost_agent")
+    from phost_agent import Journal
+    from phost_score import SELF_REPORTED, make_entries
+    from conftest import NATIVE_GRAPH, finished
+    journal = Journal(config.state / "agent" / "journal.jsonl")
+    journal.append("arena", phase="start", task=dict(scene="chain32:pluck", worlds=[1, 8]), budget=dict(turns=60, submits=10, open=True),
+                   contestants=[dict(name="opus", model="claude-code:opus"), dict(name="sonnet", model="claude-code:sonnet")])
+    graph = dict(stages={"effective.solve": dict(source="class Runtime:\n    pass\n", entry="Runtime", impl="effective.solve/agent-1")})
+    journal.append("arena", phase="turn", contestant="opus", turn=1, action="check", tokens=900)
+    journal.append("arena", phase="attempt", id="a1b2c3d4", contestant="opus", turn=1, scene="chain32:pluck", action="check", ok=False,
+                   digest="d", graph=graph, reasons=[dict(stage="effective.solve", tier="cheap", reason="RuntimeError: PROBE one")])
+    journal.append("submission", contestant="sonnet", graph=graph, entry_ids=["e1"], note="a dense solve", speedup=0.247, klass="exact")
+    tab(page, "research")
+    assert page.wait("document.querySelector('[data-test=arena]') !== null", 10)
+    count = lambda selector: page.eval(f"document.querySelectorAll({selector!r}).length")
+    assert count("[data-test=contestants] tbody tr") == 2 and count("[data-test=arena-checks] tbody tr") == 1 and count("[data-test=arena-entries] tbody tr") == 1
+    assert "PROBE one" in page.eval("document.querySelector('[data-test=arena-checks]').textContent")
+    assert "0.247" in page.eval("document.querySelector('[data-test=arena-entries]').textContent")
+    tab(page, "results")
+    assert page.wait("document.querySelector('[data-test=ledger-summary]').textContent.startsWith('0 records')", 10)
+    result = json.loads(json.dumps(finished(dash.app, dash.app.start_run(dict(graph=NATIVE_GRAPH, scene="trampoline8:impact",
+                                                                                worlds=[1, 8], steps=10))["id"])["result"]))
+    for entry in make_entries(result, label="opus", trust=SELF_REPORTED):
+        dash.app.ledger.append(entry.to_dict())
+    assert page.wait("document.querySelectorAll('[data-test=board-row]').length >= 1", 9), "the board did not refresh by itself"
+    assert "opus" in page.eval("document.querySelector('[data-test=groups]').textContent")
+    assert page.problems == []
+
+
+def test_a_recorded_win_is_offered_in_studio_and_runs_like_your_own_experiment(page, dash):
+    """What beat the reference (here, recorded from outside the page, on a scene Studio is not showing) is in the experiment list;
+    choosing it moves Studio to the scene it won on, and Run comparison runs it the way a preset does. With nothing recorded the
+    list says so instead of leaving a gap."""
+    from phost_score import SELF_REPORTED, make_entries
+    from conftest import NATIVE_GRAPH, finished
+    group = lambda start: f"[...document.querySelectorAll('[data-test=experiment] optgroup')].find(g => g.label.startsWith({start!r}))"
+    here, other = group("Beat the reference on this"), group("Beat the reference on other")
+    assert page.wait(f"({here}) && ({here}).querySelector('option').disabled", 10)
+    assert "none yet" in page.eval(f"({here}).querySelector('option').textContent")
+    choose(page, "[data-test=scene]", "chain32:pluck")
+    result = json.loads(json.dumps(finished(dash.app, dash.app.start_run(dict(graph=NATIVE_GRAPH, scene="trampoline8:impact",
+                                                                                worlds=[1, 8], steps=10))["id"])["result"]))
+    result["graph"]["stages"] = {"effective.solve": dict(impl="effective.solve/native", params={})}
+    result["stage_classes"] = {"effective.solve": "exact"}
+    for entry in make_entries(result, label="opus", trust=SELF_REPORTED):          # the fake lab measures 2x at each world count
+        dash.app.ledger.append(entry.to_dict())
+    assert page.wait(f"({other}) && ({other}).querySelector('option:not([disabled])') !== null", 12), "the win was not offered"
+    assert "none yet on this scene" in page.eval(f"({here}).querySelector('option').textContent")
+    text = page.eval(f"({other}).querySelector('option').textContent")
+    assert "trampoline8:impact" in text and "opus" in text and "2" in text
+    value = page.eval(f"({other}).querySelector('option').value")
+    assert value.startswith("win:")
+    choose(page, "[data-test=experiment]", value)
+    assert page.eval("document.querySelector('[data-test=scene]').value") == "trampoline8:impact", "choosing it did not move to its scene"
+    assert page.wait("document.querySelector('.exp-note')?.textContent.includes('recorded by opus')", 10)
+    assert "Same answer" in page.eval("document.querySelector('.exp-note').textContent")
+    assert page.eval("document.querySelector('[data-test=experiment]').value") == value
+    assert page.wait(f"({here}) && ({here}).querySelector('option:not([disabled])') !== null", 5)
+    click(page, "[data-test=run]")
+    assert page.wait(f"{STATUS}.startsWith('Finished')", 30), page.eval(STATUS)
+    choose(page, "[data-test=scene]", "chain32:pluck")                              # a win is only offered as one on its own scene
+    assert page.wait("document.querySelector('[data-test=experiment]').value === 'native'", 5)
+    assert page.problems == []

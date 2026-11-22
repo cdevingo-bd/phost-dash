@@ -43,6 +43,7 @@ def test_without_the_agent_layer_the_tab_says_so(app, monkeypatch):
 def test_before_anything_has_run_there_is_an_empty_record_not_an_error(app):
     out = app.research()
     assert out["installed"] and out["intact"] and out["attempts"] == 0 and out["recent"] == [] and out["task_list"] == []
+    assert out["arena"] is None
     assert out["journal"].endswith("agent/journal.jsonl") and set(out["leases"]) == {"cuda:0", "cpu"}
 
 
@@ -84,3 +85,23 @@ def test_the_tab_is_served_to_a_logged_in_browser_and_is_read_only(client, confi
     status, out = client.get("/api/research")
     assert status == 200 and out["installed"] and out["attempts"] == 4
     assert client.json("POST", "/api/research")[0] == 405 and client.json("DELETE", "/api/research")[0] == 405
+
+
+def test_an_arena_contest_is_on_the_tab_with_who_is_in_it_what_they_checked_and_entered(app, config, client):
+    """The contest `phost-agent arena` writes to the same journal: it used to be invisible here, so the page showed only older searches."""
+    journal = Journal(config.state / "agent" / "journal.jsonl")
+    journal.append("arena", phase="start", task=dict(scene=SCENE, worlds=[1, 8]), budget=dict(turns=60, submits=10, open=True),
+                   contestants=[dict(name="opus", model="claude-code:opus"), dict(name="sonnet", model="claude-code:sonnet")])
+    journal.append("arena", phase="turn", contestant="opus", turn=1, action="check", tokens=900)
+    graph = dict(stages={STAGE: dict(source="class Runtime:\n    pass\n", entry="Runtime", impl="effective.solve/agent-1")})
+    journal.append("arena", phase="attempt", id="a1b2c3d4", contestant="opus", turn=1, scene=SCENE, action="check", ok=False, digest="d",
+                   graph=graph, reasons=[dict(stage=STAGE, tier="cheap", reason="RuntimeError: PROBE")])
+    journal.append("submission", contestant="sonnet", graph=graph, entry_ids=["e1"], note="a dense solve", speedup=0.247, klass="exact")
+    out = app.research()["arena"]
+    assert out["status"] == "running" and out["scene"] == SCENE and [c["name"] for c in out["contestants"]] == ["opus", "sonnet"]
+    assert out["contestants"][0]["checks"] == 1 and out["contestants"][1]["best_speedup"] == 0.247
+    assert out["checks"][0]["id"] == "a1b2c3d4" and "PROBE" in out["checks"][0]["outcome"] and "source, 2 lines" in out["checks"][0]["what"]
+    assert out["entries"][0]["note"] == "a dense solve"
+    status, over_http = client.get("/api/research")
+    assert status == 200 and over_http["arena"]["status"] == "running"
+    json.dumps(out)

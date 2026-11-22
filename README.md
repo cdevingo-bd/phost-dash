@@ -25,7 +25,11 @@ Five screens, in the order you use them:
   Below the view, a plain-language verdict says whether the experiment kept the reference's answer. *Time it* is a
   separate run with nothing streaming, so the timing is clean: it gives step time, speed against the reference and
   accuracy per world count, with the checks that passed, and *Record to leaderboard* keeps it. Drag to orbit, scrub or
-  play back, and click the drift chart to jump.
+  play back, and click the drift chart to jump. The experiment list also offers **what beat the reference**, on this scene and
+  on every other scene (choosing one from another scene moves Studio to it), recorded by anyone (a contest, a search, a person): an entry that keeps the answer and is faster at every world count it was
+  measured at, with a timing that can be trusted. Choose one and run it like your own. An entry whose source only an agent contest
+  holds is saved as a kernel of yours (`win-...`, visible in Build) and runs the way a kernel you wrote does. With nothing recorded
+  that beats the reference the list says so.
 - **Build**: three workspaces. *Choose stages* shows each place in the physics step with the reference or an
   alternative for it, its settings, and what kind of change it is (same answer, close answer, changes the physics,
   read-only). Two cards above them measure on a scene, in a worker on your GPU: *Where a change could pay* (how much of the step each
@@ -35,11 +39,15 @@ Five screens, in the order you use them:
   code in a sandbox. Each ends as a choice in Studio. An experiment is plain JSON; saved ones are files.
 - **Results**: the leaderboard, grouped so only like is compared with like, with the best trade-offs marked and the trust
   level of every row (a row can be re-run here and compared with what was recorded), and a history of everything that
-  ran. Opening a past watched run replays its saved stream.
+  ran. Opening a past watched run replays its saved stream. The leaderboard looks again every few seconds while it is on
+  screen, so entries recorded from outside the page (a contest in a terminal) appear without a click.
 - **Research**: what an agent run by [phost-agent](https://github.com/cdevingo-bd/phost-agent) has done on this machine, read from
   its journal in the state directory: where proposals stopped (a funnel from *proposed* to *a win*), how many were answered from the
   memo without running anything, the device time and tokens spent, the latest attempts and finished searches, who holds each device,
-  and whether the journal's hash chain is intact. It only reads: start a search with `phost-agent run`. Needs `pip install phost-agent`
+  and whether the journal's hash chain is intact. If a contest has been started with `phost-agent arena`, an **Arena** panel leads
+  the page: who is in it and what each has done, every check posted (passed or failed, and why), and every entry. A contest with
+  no end recorded shows as running, or as quiet once nothing has been written for ten minutes. It only reads: start a search with
+  `phost-agent run`. Needs `pip install phost-agent`
   (`phost-dash[research]`) and says so when it is missing.
 - **Guide**: what the words mean and what the numbers are worth.
 

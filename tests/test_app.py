@@ -335,6 +335,21 @@ def test_reverify_needs_a_record_that_exists(app):
     assert finished(app, app.start_reverify(dict(seq=1))["id"])["result"]["agrees"] is True
 
 
+def test_a_run_that_fell_back_to_another_driver_can_be_checked_again(app, monkeypatch):
+    """A CPU scene cannot capture, so its result's config says `driver: eager` and `driver_requested: graph`. That second key is
+    a fact about the run, not a setting: re-running used to fail with a TypeError building the config from it."""
+    from phost_score import SELF_REPORTED, make_entries
+    result = json.loads(json.dumps(run(app, worlds=[8])["result"]))
+    result["config"].update(driver="eager", driver_requested="graph")
+    [entry] = make_entries(result, label="cpu", trust=SELF_REPORTED)
+    seq = app.ledger.append(entry.to_dict()).seq
+    seen = []
+    monkeypatch.setattr(app, "_isolated", lambda graph, scene, config, emit, cancel: seen.append(config) or dict(error="stub"))
+    outcome = type(app)._reverify(app, dict(seq=seq), lambda event: None, None)
+    assert seen[0].driver == "graph" and seen[0].worlds == (8,)                       # asked for again, and the fact dropped
+    assert outcome["agrees"] is None and "the run failed: stub" in outcome["differences"][0]
+
+
 # ---- drawing ----
 
 def test_only_a_finished_run_with_frames_can_be_drawn(app):
@@ -490,3 +505,60 @@ def test_the_live_view_and_the_phase_profile_refuse_a_scene_whose_engine_does_no
         bare.close()
     finally:
         ENGINES.pop("test-bare", None)
+
+
+# ---- wins: what beat the host's own step, to run like any experiment ----
+
+NATIVE_SOLVE = {"effective.solve": dict(impl="effective.solve/native", params={})}
+SOURCE_STUB = "class Runtime:\n    def __init__(self, host, params):\n        pass\n    def solve(self, system):\n        pass\n    def metrics(self):\n        return {}\n"
+
+
+def record_entries(app, stages, *, label="opus", speedup=2.0, worlds=(1, 8)):
+    from phost_score import SELF_REPORTED, make_entries
+    result = json.loads(json.dumps(run(app, worlds=list(worlds))["result"]))
+    result["graph"]["stages"], result["stage_classes"] = stages, {stage: "exact" for stage in stages}
+    for cell in result["cells"]:
+        cell["speedup"] = speedup
+    for entry in make_entries(result, label=label, trust=SELF_REPORTED):
+        app.ledger.append(entry.to_dict())
+
+
+def test_the_wins_are_what_beat_the_hosts_own_step_and_each_comes_with_a_graph_that_validates(app):
+    record_entries(app, NATIVE_SOLVE, label="opus", speedup=1.8)
+    record_entries(app, {"effective.solve": dict(impl="effective.solve/native", params=dict(tile=4))}, label="loser", speedup=0.6)
+    listing = app.wins({})["wins"]
+    assert [w["label"] for w in listing] == ["opus"] and listing[0]["lowest"] == 1.8 and listing[0]["speedups"] == {1: 1.8, 8: 1.8}
+    assert listing[0]["stages"] == {"effective.solve": "effective.solve/native"} and listing[0]["scene"] == "trampoline8:impact"
+    json.dumps(listing)
+    assert app.wins({"scene": "somewhere:else"})["wins"] == [] and error_of(app.wins, {"nope": "1"}).status == 400
+    graph = app.win_graph(listing[0]["graph_hash"])
+    assert graph["name"] == "win: opus" and graph["stages"] == NATIVE_SOLVE
+    assert app.validate({"graph": graph})["ok"] is True
+    assert error_of(app.win_graph, "0" * 16).status == 404
+
+
+def test_a_win_whose_source_only_the_agent_journal_holds_runs_as_a_kernel_of_yours(app, config):
+    """A contest's entry names an implementation made for it; the dashboard cannot import that. Its source is in the journal, so it is
+    saved as a kernel and the graph names that: the way a kernel you wrote runs, in the lab's worker."""
+    stages = {"effective.solve": dict(impl="effective.solve/agent-abc123", params={})}
+    record_entries(app, stages, label="sonnet", speedup=1.3)
+    (win,) = app.wins({})["wins"]
+    assert error_of(app.win_graph, win["graph_hash"]).status == 409                         # no journal: say why, do not guess
+    journal = config.state / "agent" / "journal.jsonl"
+    journal.parent.mkdir(parents=True, exist_ok=True)
+    submission = dict(kind="submission", contestant="sonnet", graph=dict(stages={"effective.solve": dict(
+        source=SOURCE_STUB, entry="Runtime", impl="effective.solve/agent-abc123")}))
+    journal.write_text("not json\n" + json.dumps(dict(seq=1, entry=dict(kind="arena", phase="turn"))) + "\n"
+                       + json.dumps(dict(seq=2, entry=submission)) + "\n")
+    graph = app.win_graph(win["graph_hash"])
+    name = f"win-{win['graph_hash'][:12]}"
+    assert graph["stages"]["effective.solve"]["impl"] == f"effective.solve/user-{name}"
+    assert app.store.load_kernel(name)["source"] == SOURCE_STUB and app.store.load_kernel(name)["stage"] == "effective.solve"
+    assert app.validate({"graph": graph})["ok"] is True
+
+
+def test_wins_are_served_over_http_to_a_logged_in_browser(client, app):
+    status, out = client.get("/api/wins")
+    assert status == 200 and out == dict(wins=[])
+    assert client.get("/api/wins/ffffffff/graph")[0] == 404
+    assert client.json("POST", "/api/wins")[0] == 405

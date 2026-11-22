@@ -61,6 +61,7 @@ function mountBoard(root, go) {
     clear(scene, h("option", { value: "" }, "Any scene"), scenes().map((sc) => h("option", { value: sc.id, selected: sc.id === keep }, sc.id)));
   }
 
+  let seen = "";
   async function refresh() {
     const query = new URLSearchParams();
     for (const [key, el] of [["scene", scene], ["klass", klass], ["trust", trust], ["worlds", worlds], ["label", label]]) if (el.value) query.set(key, el.value);
@@ -68,10 +69,13 @@ function mountBoard(root, go) {
     try {
       const out = await get(`/api/board?${query}`);
       summary.textContent = `${out.ledger.count} record${out.ledger.count === 1 ? "" : "s"} in the ledger${out.ledger.ok ? "" : " · PROBLEMS FOUND"}`;
+      const key = `${query}|${JSON.stringify(out)}`;
+      if (key === seen) return;                         // nothing new: leave the page (and any re-run result on it) as it is
+      seen = key;
       clear(groups, out.groups.length ? out.groups.map(group) : empty({ iconName: "trophy", title: "Nothing recorded yet",
         text: "Run a comparison in Studio, press Time it, then Record to leaderboard.",
         action: button("Go to Studio", { kind: "primary", iconName: "play", onclick: () => go.show("studio") }) }));
-    } catch (error) { clear(groups, h("div", { class: "alert bad" }, error.message)); }
+    } catch (error) { seen = ""; clear(groups, h("div", { class: "alert bad" }, error.message)); }
   }
 
   const objectiveName = (name) => ({ speedup: "Speed vs reference", accuracy_ratio: "Accuracy ÷ noise", step_ms: "Step time (ms)" }[name] || name);
@@ -126,6 +130,8 @@ function mountBoard(root, go) {
   fillScenes();
   refresh();
   window.addEventListener("phost-ledger", refresh);
+  // Entries also arrive from outside this page (a contest, `phost-score submit`), so look again while the page is on screen.
+  setInterval(() => { if (document.visibilityState === "visible" && root.offsetParent !== null) refresh(); }, 5000);
   return { activate() { fillScenes(); refresh(); } };
 }
 

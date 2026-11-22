@@ -3,6 +3,7 @@ so it can be tested without a server and the server stays a thin translation lay
 
 from __future__ import annotations
 
+import copy
 import importlib.metadata
 import importlib.util
 import json
@@ -20,7 +21,7 @@ from phost_lab.bootstrap import load_registry, load_scenes
 from phost_lab.engine import require_capability, supports
 from phost_lab.isolate import run_isolated
 from phost_lab.runner import RunConfig, comparable_to_native, stage_classes
-from phost_score import Entry, Ledger, SELF_REPORTED, leaderboard, make_entries, reverify
+from phost_score import Entry, Ledger, SELF_REPORTED, leaderboard, make_entries, reverify, wins as score_wins
 
 from . import gpu, userkernels
 from .jobs import DONE, JobError, JobManager, NoSuchJob
@@ -105,10 +106,11 @@ class App:
         ``phost-agent run``, which writes the journal under this dashboard's state directory by default."""
         if not installed("phost_agent"):
             return dict(installed=False)
-        from phost_agent import Journal, overview
+        from phost_agent import Journal, arena_overview, overview
         agent = self.config.state / "agent"
-        return dict(installed=True, journal=str(agent / "journal.jsonl"),
-                    **overview(Journal(agent / "journal.jsonl"), lease_dir=agent / "leases"))
+        journal = Journal(agent / "journal.jsonl")
+        return dict(installed=True, journal=str(agent / "journal.jsonl"), arena=arena_overview(journal),
+                    **overview(journal, lease_dir=agent / "leases"))
 
     def catalog(self) -> dict:
         return dict(registry=self.registry().describe(), scenes=self.scenes().describe(), plugins=list(self.plugins))
@@ -411,6 +413,67 @@ class App:
         return dict(groups=leaderboard(records, include_unreliable=query.get("include_unreliable") == "1", **filters),
                     ledger=self.ledger_status())
 
+    # ---- wins: what beat the host's own step, to run like any experiment ----
+
+    def wins(self, query: Mapping[str, str]) -> dict:
+        """The recorded entries that beat the host's own step at every world count they were measured at (``phost_score.wins``),
+        strongest first, to offer in Studio beside the user's own experiments. ``scene`` narrows them to one scene."""
+        unknown = set(query) - {"scene"}
+        if unknown:
+            raise ApiError(400, f"unknown filter {sorted(unknown)[0]!r}")
+        listing = []
+        for win in score_wins(self.ledger.records(strict=False), scene=query.get("scene") or None):
+            listing.append({**{k: v for k, v in win.items() if k not in ("graph", "notes")},
+                            "stages": {stage: node.get("impl") for stage, node in (win["graph"].get("stages") or {}).items()}})
+        return dict(wins=listing)
+
+    def win_graph(self, graph_hash: str) -> dict:
+        """A graph that runs a win, ready for Studio. A win from a contest or a search may be an implementation whose source only
+        the agent journal holds; that source is saved here as a kernel of yours (``<stage>/user-win-...``, visible in Build) and the
+        graph names it, so it runs the way a kernel you wrote does: in the lab's worker, never in this process."""
+        win = next((w for w in score_wins(self.ledger.records(strict=False)) if w["graph_hash"] == graph_hash), None)
+        if win is None:
+            raise ApiError(404, "that is not a win in this ledger (a later run of it may have lost)")
+        graph = copy.deepcopy(win["graph"])
+        graph["name"] = f"win: {win['label'] or win['graph_hash'][:8]}"
+        registry = self.registry()
+        sources = self._submitted_sources()
+        substituted = 0
+        for stage, node in (graph.get("stages") or {}).items():
+            impl = node.get("impl")
+            if impl in {i.id for i in registry.impls_for(stage)}:
+                continue
+            found = sources.get(impl)
+            if found is None:
+                raise ApiError(409, f"{stage} uses {impl!r}, which is not installed here, and its source is not in this state's agent "
+                                    "journal: run it where it was made, or start the dashboard with the plugin that provides it")
+            name = f"win-{graph_hash[:12]}" + (f"-{substituted}" if substituted else "")
+            self._stored(self.store.save_kernel, name, stage=stage, source=found["source"], entry=found["entry"])
+            graph["stages"][stage] = dict(impl=userkernels.impl_id(stage, name), params={})
+            substituted += 1
+        if substituted:                                    # the contest's own candidate modules are not importable here
+            graph["plugins"] = [m for m in graph.get("plugins", []) if m in self.plugins]
+        return graph
+
+    def _submitted_sources(self) -> dict[str, dict[str, str]]:
+        """Source an agent contest submitted, by the implementation id its graph named: read from the agent journal."""
+        found: dict[str, dict[str, str]] = {}
+        try:
+            lines = (self.config.state / "agent" / "journal.jsonl").read_text(encoding="utf-8").splitlines()
+        except FileNotFoundError:
+            return found
+        for line in lines:
+            try:
+                entry = json.loads(line)["entry"]
+            except (ValueError, KeyError, TypeError):
+                continue
+            if entry.get("kind") != "submission":
+                continue
+            for node in (entry.get("graph", {}).get("stages") or {}).values():
+                if node.get("source") and node.get("impl"):
+                    found[node["impl"]] = dict(source=node["source"], entry=node.get("entry") or "Runtime")
+        return found
+
     # ---- runners (they run on the job thread) ----
 
     def _env(self) -> dict[str, str]:
@@ -456,7 +519,7 @@ class App:
         entry = Entry.from_dict(record.entry)
 
         def run(graph, scene, config):
-            return self._isolated(graph, scene, RunConfig(**{**config, "worlds": tuple(config["worlds"])}), emit, cancel)
+            return self._isolated(graph, scene, RunConfig.from_recorded(config), emit, cancel)
 
         outcome = reverify(entry, run)
         return dict(agrees=outcome.agrees, differences=list(outcome.differences),

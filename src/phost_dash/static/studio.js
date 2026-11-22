@@ -125,20 +125,43 @@ export function mountStudio(root, go) {
   let timedTouched = false;
   worldsIn.addEventListener("input", () => { timedTouched = true; });
 
+  // What beat the reference, on any scene, recorded by anyone (a contest, a search, a person): offered like your own experiments.
+  // A win belongs to the scene it was measured on, so choosing one from another scene moves Studio to that scene.
+  let wins = [];
+  const winValue = (w) => `win:${w.graph_hash}@${w.scene}`;
+  const winFor = (value) => wins.find((w) => winValue(w) === value);
+  async function loadWins() {
+    try {
+      const seen = new Set();                                      // one option per graph per scene, the strongest first
+      wins = (await get("/api/wins")).wins.filter((w) => !seen.has(winValue(w)) && seen.add(winValue(w)));
+    } catch (error) { wins = []; }
+    if (JSON.stringify(wins) !== shownWins) fillExperiments();
+  }
+  let shownWins = "";
+
   function fillExperiments() {
     const keep = expSel.value;
     const n = changeCount();
+    shownWins = JSON.stringify(wins);
+    const here = wins.filter((w) => w.scene === sceneSel.value);
+    const elsewhere = wins.filter((w) => w.scene !== sceneSel.value);
+    const winText = (w, showScene) => `${showScene ? `${w.scene} · ` : ""}${w.label || "entry"} · ${num(w.lowest, 3)}× · ${w.klass === "exact" ? "same answer" : "close answer"}`;
     const groups = [
       ["Reference", [["native", "Reference only (no changes)"]]],
       ["Your experiment", [["editor", `${state.graph.name} · ${n} change${n === 1 ? "" : "s"}`]]],
+      ["Beat the reference on this scene", here.length
+        ? here.map((w) => [winValue(w), winText(w, false)])
+        : [["", elsewhere.length ? "none yet on this scene: others are listed below" : "none yet: nothing recorded beats the reference here"]]],
+      ...(elsewhere.length ? [["Beat the reference on other scenes", elsewhere.map((w) => [winValue(w), winText(w, true)])]] : []),
     ];
     const presets = availablePresets();
     if (presets.length) groups.push(["Examples", presets.map((p) => [`preset:${p.id}`, p.title])]);
     if (state.saved.length) groups.push(["Saved", state.saved.map((name) => [`saved:${name}`, name])]);
     if (S.replayGraph) groups.push(["From history", [["replay", S.replayGraph.name || "replayed experiment"]]]);
     clear(expSel, groups.map(([label, options]) => h("optgroup", { label },
-      options.map(([value, text]) => h("option", { value }, text)))));
-    expSel.value = [...expSel.options].some((o) => o.value === keep) ? keep : (n ? "editor" : "native");
+      options.map(([value, text]) => h("option", { value, disabled: value === "" }, text)))));
+    const stays = [...expSel.options].some((o) => o.value === keep && !o.disabled) && !(winFor(keep) && winFor(keep).scene !== sceneSel.value);
+    expSel.value = stays ? keep : (n ? "editor" : "native");        // a win measured on another scene is not carried to this one
     refreshExpectation();
   }
 
@@ -146,6 +169,7 @@ export function mountStudio(root, go) {
     if (value === "native") return NATIVE;
     if (value === "replay") return S.replayGraph;
     if (value.startsWith("preset:")) return presetGraph(value.slice(7));
+    if (value.startsWith("win:")) return get(`/api/wins/${encodeURIComponent(value.slice(4).split("@")[0])}/graph`);
     if (value.startsWith("saved:")) return get(`/api/graphs/${encodeURIComponent(value.slice(6))}`);
     return cleanGraph();
   }
@@ -163,8 +187,11 @@ export function mountStudio(root, go) {
       if (!out.ok) { S.expect = null; clear(expNote, h("span", { class: "hint bad" }, out.error)); return null; }
       S.expect = out;
       const classes = [...new Set(Object.values(out.stage_classes))];
+      const win = value.startsWith("win:") ? winFor(value) : null;
       clear(expNote, classes.length ? classes.map((k) => pill(classInfo(k).label, classInfo(k).tone, null, classInfo(k).help))
         : h("span", { class: "hint" }, "Changes nothing: a second copy of the reference."),
+        win ? h("span", { class: "hint", title: "Measured on this machine by whoever ran it; nothing has checked it independently." },
+          ` recorded by ${win.label || "someone"}, self-reported: ${Object.entries(win.speedups).map(([k, v]) => `${num(v, 3)}× at ${k} world${k === "1" ? "" : "s"}`).join(", ")}.`) : null,
         h("button", { class: "link", type: "button", onclick: () => go.show("build") }, "Edit in Build"));
       return graph;
     } catch (error) {
@@ -173,11 +200,20 @@ export function mountStudio(root, go) {
     }
   }
 
-  on("catalog", () => { fillScenes(); fillExperiments(); });
+  on("catalog", () => { fillScenes(); fillExperiments(); loadWins(); });
   on("graph", () => { fillExperiments(); });
-  sceneSel.addEventListener("change", () => { state.scene = sceneSel.value; fillScenes(); });
-  expSel.addEventListener("change", refreshExpectation);
-  fillScenes(); fillExperiments();
+  sceneSel.addEventListener("change", () => { state.scene = sceneSel.value; fillScenes(); fillExperiments(); loadWins(); });
+  expSel.addEventListener("change", () => {
+    const win = expSel.value.startsWith("win:") ? winFor(expSel.value) : null;
+    if (win && win.scene !== sceneSel.value && scenes().some((sc) => sc.id === win.scene)) {
+      state.scene = sceneSel.value = win.scene;                      // a win is only a win on its own scene
+      fillScenes();
+      fillExperiments();                                             // regroups for that scene and asks about the chosen win
+    } else refreshExpectation();
+  });
+  fillScenes(); fillExperiments(); loadWins();
+  // wins arrive from outside this page too (a contest running in a terminal), so look again while the page is on screen
+  setInterval(() => { if (document.visibilityState === "visible" && root.offsetParent !== null) loadWins(); }, 8000);
 
   function tryExample() {
     expSel.value = "preset:damping";
@@ -495,5 +531,5 @@ export function mountStudio(root, go) {
   const GATE_NAMES = { finite: "Stayed finite", accuracy: "Accuracy", stage: "Stage limits" };
 
   controller = { open, showRun: showRunById };
-  return { activate() { for (const v of Object.values(views)) v.draw(); } };
+  return { activate() { loadWins(); for (const v of Object.values(views)) v.draw(); } };
 }
