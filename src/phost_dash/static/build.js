@@ -10,6 +10,7 @@ import { state, setGraph, touchGraph, refreshSaved, refreshCatalog, contracts, i
          availablePresets, presetGraph, stageInfo, classInfo, KIND_LABEL, changeCount, on } from "./state.js";
 import { LineChart } from "./charts.js";
 import { analysisCard } from "./analysis.js";
+import { profileCard } from "./profile.js";
 
 const CONSTANTS = ["a", "b", "c", "d", "e", "f", "g", "h"];
 
@@ -69,6 +70,7 @@ function mountStages(root, go, show) {
     h("section", { class: "card" }, h("header", { class: "card-head" }, h("h2", {}, "Start from an example"),
       h("span", { class: "grow" }), h("span", { class: "hint" }, "or build from nothing below")), examples),
     analysisCard(),
+    profileCard(),
     h("div", { class: "split-main" }, h("div", {}, h("header", { class: "section-head" }, h("h2", {}, "The physics step"),
         h("p", {}, "Each card is one place in the step where the reference can be swapped for something else. Leave a card on “Reference” to keep the original.")),
         stages),

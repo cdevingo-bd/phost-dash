@@ -209,6 +209,21 @@ def test_the_opportunity_card_says_how_much_each_stage_could_give_and_why_not(pa
     assert page.problems == []
 
 
+def test_the_profile_card_times_each_phase_and_adds_the_experiment_column_only_when_asked(page):
+    tab(page, "build")
+    assert page.eval("document.querySelector('[data-test=profile-with]').disabled") is True       # no experiment yet
+    click(page, "[data-test=profile-run]")
+    assert page.wait("document.querySelector('[data-test=profile-table] tbody tr') !== null", 20)
+    heads = page.eval("[...document.querySelectorAll('[data-test=profile-table] thead th')].map(t => t.textContent)")
+    assert heads == ["Phase", "Reference"]
+    rows = page.eval("[...document.querySelectorAll('[data-test=profile-table] tbody tr')].map(r => r.dataset.phase + '|' + r.textContent)")
+    assert [r.split("|")[0] for r in rows] == ["kinematics", "crb / armature", "collision", "make_constraint",
+                                               "velocity+actuation+accel", "effective", "solver", "integrate", "full"]
+    assert "Constraint solver" in rows[6] and "1.83 ms" in rows[6] and "of which the flexible-body solve" in rows[5]
+    assert "Whole step" in rows[-1] and "1.70 ms" in rows[-1]
+    assert page.problems == []
+
+
 def test_a_stored_watch_replays_with_its_own_scene_and_graph(page):
     watch(page)
     watched = page.eval("document.querySelector('[data-test=scene]').value")

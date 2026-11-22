@@ -215,6 +215,42 @@ def test_a_held_out_scene_is_never_analysed(config, runners, tmp_path):
         held.close()
 
 
+# ---- where the time goes ----
+
+def test_a_profile_goes_to_the_runner_with_its_scene_and_the_experiment_it_is_to_install(app, runners):
+    job = finished(app, app.start_profile(dict(scene="trampoline8:discrete", worlds=[1], graph=NATIVE_GRAPH))["id"])
+    request, = runners.calls
+    assert job["kind"] == "profile" and job["status"] == "done"
+    assert request["scene"] == "trampoline8:discrete" and request["graph"]["name"] == NATIVE_GRAPH["name"]
+    assert app.store.load_job(job["id"])["result"]["profile"]["cells"][0]["variants"]["native"]["phases"]["solver"] > 0
+    finished(app, app.start_profile(dict(scene="trampoline8:discrete"))["id"])
+    assert runners.calls[1]["graph"] is None and runners.calls[1]["worlds"] == [1]       # the reference alone, one world
+
+
+@pytest.mark.parametrize("over,message", [
+    (dict(scene="nope"), "no scene"), (dict(worlds=[]), "worlds"), (dict(worlds=[1, 2, 3, 4]), "worlds"), (dict(worlds=[True]), "worlds"),
+    (dict(graph={"name": ""}), "name"),
+])
+def test_a_profile_request_is_checked_before_anything_is_queued(app, runners, over, message):
+    body = dict(scene="trampoline8:impact", worlds=[1])
+    body.update(over)
+    assert message in error_of(app.start_profile, body).message
+    assert app.list_jobs() == [] and runners.calls == []
+
+
+def test_a_held_out_scene_is_never_profiled(config, runners, tmp_path):
+    from phost_dash import App
+    (tmp_path / "s").mkdir()
+    (tmp_path / "s" / "held.xml").write_text("<mujoco/>")
+    (tmp_path / "s" / "held.json").write_text(json.dumps(dict(hidden=True)))
+    held = App(type(config)(state=config.state, scene_dirs=(str(tmp_path / "s"),)), runners=dict(profile=runners.profile))
+    try:
+        assert error_of(held.start_profile, dict(scene="held")).status == 403
+        assert held.list_jobs() == [] and runners.calls == []
+    finally:
+        held.close()
+
+
 # ---- jobs ----
 
 def test_jobs_are_listed_and_fetched_without_their_event_log(app):

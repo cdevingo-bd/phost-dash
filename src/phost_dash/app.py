@@ -73,7 +73,7 @@ class App:
         self._lock = threading.Lock()
         self.jobs = JobManager(self.store, runners if runners is not None else {
             "run": self._run, "live": self._live, "reverify": self._reverify, "render": self._render,
-            "check": self._check, "analysis": self._analysis})
+            "check": self._check, "analysis": self._analysis, "profile": self._profile})
 
     def close(self) -> None:
         self.jobs.close()
@@ -264,6 +264,22 @@ class App:
             raise ApiError(400, f"worlds is a list of 1 to 3 whole numbers between 1 and {MAX_WORLDS}")
         return self.jobs.submit("analysis", dict(scene=scene_id, worlds=worlds)).summary()
 
+    def start_profile(self, body: Mapping[str, Any]) -> dict:
+        """Time each phase of the step on a scene: native, and with an experiment installed when one is given. Never for a
+        held-out scene."""
+        scenes = self.scenes()
+        scene_id = body.get("scene")
+        if scene_id not in scenes.ids():
+            raise ApiError(400, f"no scene {scene_id!r}")
+        if scenes.get(scene_id).hidden:
+            raise ApiError(403, "a held-out scene's timings are never shown")
+        worlds = body.get("worlds", [1])
+        if not (isinstance(worlds, list) and 1 <= len(worlds) <= 3
+                and all(isinstance(w, int) and not isinstance(w, bool) and 1 <= w <= MAX_WORLDS for w in worlds)):
+            raise ApiError(400, f"worlds is a list of 1 to 3 whole numbers between 1 and {MAX_WORLDS}")
+        graph = self._graph(body["graph"], self.registry()).to_dict() if body.get("graph") else None
+        return self.jobs.submit("profile", dict(scene=scene_id, worlds=worlds, graph=graph)).summary()
+
     def start_reverify(self, body: Mapping[str, Any]) -> dict:
         seq = body.get("seq")
         if not isinstance(seq, int) or isinstance(seq, bool):
@@ -383,6 +399,14 @@ class App:
                             scene_modules=self.config.scene_modules, scene_dirs=self.config.scene_dirs,
                             timeout=self.config.job_timeout, on_progress=emit, cancel=cancel, env=self._env(),
                             report=dict(kinds=["opportunities", "structure"], worlds=request["worlds"]))
+
+    def _profile(self, request, emit, cancel) -> dict:
+        emit(dict(event="start", what="timing each phase of the step"))
+        graph = GraphSpec.from_dict(dict(request["graph"])) if request.get("graph") else NATIVE
+        return run_isolated(graph, request["scene"], RunConfig(), plugins=self._worker_plugins(),
+                            scene_modules=self.config.scene_modules, scene_dirs=self.config.scene_dirs,
+                            timeout=self.config.job_timeout, on_progress=emit, cancel=cancel, env=self._env(),
+                            report=dict(kinds=["profile"], worlds=request["worlds"]))
 
     def _reverify(self, request, emit, cancel) -> dict:
         record = next(r for r in self.ledger.records(strict=False) if r.seq == request["seq"])

@@ -102,6 +102,18 @@ class FakeRunners:
     def check(self, request, emit, cancel):
         return dict(ok=True, verdict=dict(ok=True), sandbox="fake")
 
+    def profile(self, request, emit, cancel):
+        self.calls.append(request)
+        phases = lambda scale: {"kinematics": 0.1 * scale, "crb / armature": 0.05 * scale, "collision": 0.2 * scale,
+                                "make_constraint": 0.15 * scale, "velocity+actuation+accel": 0.26 * scale, "solver": 1.83 * scale,
+                                "integrate": 0.03 * scale}
+        variant = lambda scale: dict(full_ms=1.7 * scale, phases=phases(scale), phase_sum_ms=2.6 * scale, effective_ms=0.15 * scale)
+        variants = {"native": variant(1.0)}
+        if request.get("graph"):
+            variants["graph"] = variant(1.7)
+        return dict(profile=dict(scene=request["scene"], nv=330, device="Fake GPU", integrator="discrete", timestep=0.0005,
+                                 cells=[dict(worlds=1, variants=variants)]))
+
     def analysis(self, request, emit, cancel):
         self.calls.append(request)
         stage = lambda cls, applies=True, **kw: {
@@ -135,7 +147,8 @@ def config(tmp_path):
 @pytest.fixture
 def app(config, runners):
     app = App(config, runners=dict(run=runners.run, live=runners.live, reverify=runners.reverify, render=runners.render,
-                                   check=runners.check, analysis=runners.analysis), gpu_status=lambda: FAKE_GPU)
+                                   check=runners.check, analysis=runners.analysis,
+                                   profile=runners.profile), gpu_status=lambda: FAKE_GPU)
     yield app
     app.close()
 
@@ -197,7 +210,8 @@ def dash(config, runners):
     server = serve(config, token=TOKEN)
     server.app.close()                                         # swap in fakes before serving
     server.app = App(config, runners=dict(run=runners.run, live=runners.live, reverify=runners.reverify, render=runners.render,
-                                           check=runners.check, analysis=runners.analysis), gpu_status=lambda: FAKE_GPU)
+                                           check=runners.check, analysis=runners.analysis,
+                                   profile=runners.profile), gpu_status=lambda: FAKE_GPU)
     serve_in_thread(server)
     yield server
     server.shutdown_all()

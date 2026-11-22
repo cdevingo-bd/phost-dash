@@ -332,3 +332,7 @@ input.code { width: 100%; }
 .opp-table code { font-size: 11px; color: var(--ink-2); }
 .structure h3 { font-size: 14px; margin: 14px 0 4px; }
 .structure p { margin: 4px 0; font-size: 13px; }
+.opp-table tr.sub td { color: var(--ink-2); font-size: 12px; }
+.opp-table tr.sub td:first-child { padding-left: 24px; }
+.opp-table tr.total td { border-top: 2px solid var(--border-2); }
+.analysis .check { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; }

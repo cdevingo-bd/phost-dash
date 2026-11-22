@@ -198,3 +198,22 @@ def test_a_real_watch_of_a_scene_the_graph_cannot_run_on_says_why(real):
     assert status == 200
     failed = finish(client, job["id"])
     assert failed["status"] == "failed" and "outside 1..512" in failed["error"]
+
+
+def test_the_opportunity_and_profile_cards_run_in_a_real_worker(real):
+    client, server = real
+    status, job = client.post("/api/jobs/analysis", dict(scene="trampoline8:discrete", worlds=[1]))
+    assert status == 200, job
+    done = finish(client, job["id"])
+    assert done["status"] == "done", done.get("error")
+    cell = done["result"]["opportunities"]["cells"][0]
+    assert 0 < cell["stages"]["effective.solve"]["share"] < 1 and cell["stages"]["effective.solve"]["ceiling"] >= 1.0
+    assert done["result"]["structure"]["stages"]["effective.solve"]["structure"]["n"] > 0
+
+    status, job = client.post("/api/jobs/profile", dict(scene="trampoline8:impact", worlds=[1], graph=DAMPING))
+    assert status == 200, job
+    done = finish(client, job["id"])
+    assert done["status"] == "done", done.get("error")
+    variants = done["result"]["profile"]["cells"][0]["variants"]
+    assert set(variants) == {"native", "graph"} and variants["graph"]["phases"]["solver"] > 0
+    assert client.post("/api/jobs/analysis", dict(scene="nope"))[0] == 400

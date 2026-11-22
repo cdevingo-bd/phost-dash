@@ -28,9 +28,10 @@ Four screens, in the order you use them:
   play back, and click the drift chart to jump.
 - **Build**: three workspaces. *Choose stages* shows each place in the physics step with the reference or an
   alternative for it, its settings, and what kind of change it is (same answer, close answer, changes the physics,
-  read-only). A card above them, *Where a change could pay*, measures on a scene how much of the step each part takes and
-  so the most a faster replacement could give, says which parts apply to that scene and why not, and shows the shape of
-  the flexible-body matrix. *Type an equation* draws the curve of a force law before any simulation. *Write a kernel* checks your
+  read-only). Two cards above them measure on a scene, in a worker on your GPU: *Where a change could pay* (how much of the step each
+  part takes, so the most a faster replacement could give, which parts apply and why not, and the shape of the
+  flexible-body matrix) and *Where the time goes* (each phase of the step timed on its own, for the reference and, if you ask,
+  for your experiment installed). *Type an equation* draws the curve of a force law before any simulation. *Write a kernel* checks your
   code in a sandbox. Each ends as a choice in Studio. An experiment is plain JSON; saved ones are files.
 - **Results**: the leaderboard, grouped so only like is compared with like, with the best trade-offs marked and the trust
   level of every row (a row can be re-run here and compared with what was recorded), and a history of everything that
