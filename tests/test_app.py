@@ -397,8 +397,41 @@ def test_equation_previews_come_back_as_data_and_bad_equations_as_messages(app):
     assert app.equation(dict(stage="dof.passive_force", expr="q", n="many"))["ok"] is False
 
 
+@needs_author
+def test_every_typed_stage_describes_its_form_for_the_editor(app):
+    forms = app.equation_forms()
+    assert set(forms) == {"dof.passive_force", "control.law", "body.wrench", "probe.state", "effective.solve", "newton.linear_solve"}
+    assert forms["body.wrench"]["kind"] == "pointwise" and forms["body.wrench"]["outputs"][:2] == ["fx", "fy"]
+    assert forms["probe.state"]["kind"] == "channels" and forms["probe.state"]["arrays"]["qvel"] == "nv"
+    assert forms["newton.linear_solve"]["kind"] == "iteration" and "rhs" in forms["newton.linear_solve"]["inputs"]
+
+
+@needs_author
+def test_a_wrench_preview_has_a_curve_per_output(app):
+    out = app.equation(dict(stage="body.wrench", expr="fx = -a*vx\nfz = b", constants=dict(a=2.0, b=3.0), sweep="vx", lo=-1, hi=1, n=3))
+    assert out["ok"] and out["outputs"]["fx"] == [2.0, 0.0, -2.0] and out["outputs"]["fz"] == [3.0, 3.0, 3.0]
+    assert app.equation(dict(stage="body.wrench", expr="-a*vx"))["ok"] is False                   # several outputs need a name each
+
+
+@needs_author
+def test_a_probe_preview_lists_its_channels_and_refuses_an_array_where_a_number_is_needed(app):
+    out = app.equation(dict(stage="probe.state", expr="speed = norm(qvel)\nfirst = qpos[0]", size=6))
+    assert out["ok"] and [c["label"] for c in out["channels"]] == ["speed", "first"] and out["sample"]["entries"] == 6
+    bad = app.equation(dict(stage="probe.state", expr="qvel"))
+    assert bad["ok"] is False and "array along" in bad["error"]
+
+
+@needs_author
+def test_a_solver_preview_gives_the_residual_after_every_pass(app):
+    out = app.equation(dict(stage="newton.linear_solve", init="", step="x = x + a*(rhs - A@x)/diag", constants=dict(a=0.5),
+                            iterations=12, size=8, condition=20))
+    assert out["ok"] and len(out["residuals"]) == 12 and out["residuals"][-1] < out["residuals"][0] and out["finite"]
+    assert app.equation(dict(stage="newton.linear_solve", step=""))["ok"] is False
+    assert app.equation(dict(stage="newton.linear_solve", iterations=0))["ok"] is False
+
+
 def test_author_features_say_what_is_missing(app, monkeypatch):
     import phost_dash.app as module
     monkeypatch.setattr(module, "installed", lambda name: False)
-    for call, arg in ((app.kernel_template, ()), (app.equation, ({},)), (app.start_check, ({},))):
+    for call, arg in ((app.kernel_template, ()), (app.equation, ({},)), (app.equation_forms, ()), (app.start_check, ({},))):
         assert error_of(call, *arg).status == 501

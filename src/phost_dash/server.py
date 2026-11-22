@@ -36,6 +36,7 @@ ROUTES = [
     ("PUT", r"/api/kernels/([^/]+)", lambda a, m, q, b: a.put_kernel(m[1], b)),
     ("DELETE", r"/api/kernels/([^/]+)", lambda a, m, q, b: a.delete_kernel(m[1])),
     ("GET", r"/api/author/template", lambda a, m, q, b: a.kernel_template()),
+    ("GET", r"/api/author/forms", lambda a, m, q, b: a.equation_forms()),
     ("POST", r"/api/author/equation", lambda a, m, q, b: a.equation(b)),
     ("POST", r"/api/author/kernel/check", lambda a, m, q, b: a.start_check(b)),
     ("POST", r"/api/jobs/run", lambda a, m, q, b: a.start_run(b)),

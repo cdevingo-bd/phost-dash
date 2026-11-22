@@ -183,16 +183,27 @@ class App:
         return dict(source=path.read_text(encoding="utf-8"), stage="newton.linear_solve", entry="Runtime")
 
     def equation(self, body: Mapping[str, Any]) -> dict:
-        """Check an equation and sample it. A bad equation is a normal answer (``ok: false`` and the message), not an error."""
+        """Check what was typed for a stage and show what it does. A bad one is a normal answer (``ok: false`` and the message),
+        not an error. What comes back depends on the stage's form: a curve per output, channel values on a sample state, or the
+        residual of a solver step after each pass."""
         self._need_author()
         from phost_author.expression_impls import preview
         try:
-            numbers = {k: body[k] for k in ("lo", "hi") if k in body}
+            numbers = {k: float(body[k]) for k in ("lo", "hi", "condition") if k in body}
+            whole = {k: int(body[k]) for k in ("n", "iterations", "size") if k in body}
+            text = {k: str(body[k]) for k in ("init", "step") if k in body}
             return dict(ok=True, **preview(
-                str(body.get("stage")), str(body.get("expr", "")), body.get("constants") or {}, body.get("sweep"),
-                body.get("at") or {}, n=int(body.get("n", 101)), **{k: float(v) for k, v in numbers.items()}))
+                self.registry(), str(body.get("stage")), str(body.get("expr", "")), body.get("constants") or {}, body.get("sweep"),
+                body.get("at") or {}, **numbers, **whole, **text))
         except (ContractError, TypeError, ValueError) as error:
             return dict(ok=False, error=str(error))
+
+    def equation_forms(self) -> dict:
+        """What a person typing for each stage needs to know (its names, outputs and kind), for the editor."""
+        self._need_author()
+        from phost_author.expression_impls import describe_form
+        registry = self.registry()
+        return {stage: describe_form(registry, stage) for stage in registry.equation_stages()}
 
     def _need_author(self) -> None:
         if not installed("phost_author"):

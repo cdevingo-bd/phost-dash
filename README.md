@@ -31,7 +31,7 @@ Four screens, in the order you use them:
   read-only). Two cards above them measure on a scene, in a worker on your GPU: *Where a change could pay* (how much of the step each
   part takes, so the most a faster replacement could give, which parts apply and why not, and the shape of the
   flexible-body matrix) and *Where the time goes* (each phase of the step timed on its own, for the reference and, if you ask,
-  for your experiment installed). *Type an equation* draws the curve of a force law before any simulation. *Write a kernel* checks your
+  for your experiment installed). *Type an equation* takes the law of any stage that declares a form for it and shows what it does before any simulation: a curve per output for a force, controller or body wrench, each channel's value on a sample state for a probe, and the residual after every pass for a typed solver step (conjugate gradients, Jacobi or your own lines). *Write a kernel* checks your
   code in a sandbox. Each ends as a choice in Studio. An experiment is plain JSON; saved ones are files.
 - **Results**: the leaderboard, grouped so only like is compared with like, with the best trade-offs marked and the trust
   level of every row (a row can be re-run here and compared with what was recorded), and a history of everything that

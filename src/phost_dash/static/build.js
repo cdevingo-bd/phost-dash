@@ -197,74 +197,198 @@ function mountStages(root, go, show) {
 }
 
 // ---- 2. the equation ----
+// A stage declares the form its law takes (data in the stage's contract), and this tab builds the editor for that form:
+// a law per element (one or several outputs), measured channels over the state, or a solver step run on a sample system.
+
+const DEFAULTS = {
+  "dof.passive_force": { text: "-a*v - b*q", constants: { a: 0.4, b: 2 } },
+  "control.law": { text: "a*(b - length) - c*velocity", constants: { a: 5, b: 0, c: 0.3 } },
+  "body.wrench": { text: "fx = -a*vx\nfy = -a*vy\nfz = -a*vz - b\ntx = -0.1*a*wx\nty = -0.1*a*wy\ntz = -0.1*a*wz", constants: { a: 0.4, b: 0 } },
+  "probe.state": { text: "speed = norm(qvel)\nenergy = 0.5*sum(qvel*qvel)\nworst = maxabs(qacc)", constants: {} },
+};
+const SOLVERS = {
+  "Conjugate gradients (Jacobi preconditioner)": { init: null, step: null, constants: { a: 1 } },
+  "Damped Jacobi": { init: "", step: "x = x + a*(rhs - A@x)/diag", constants: { a: 0.6 } },
+  "Steepest descent": { init: "", step: "r = rhs - A@x\nalpha = dot(r, r) / max(dot(r, A@r), 1e-30)\nx = x + alpha*r", constants: { a: 1 } },
+};
 
 function mountEquation(root, go) {
   const stages = [...new Set(state.catalog.registry.impls.filter((i) => i.kind === "expression").map((i) => i.stage))];
   if (!stages.length) { root.append(empty({ iconName: "info", title: "No stage accepts an equation here" })); return; }
   const stageSel = h("select", { "aria-label": "stage", "data-test": "eq-stage" },
     stages.map((st) => h("option", { value: st }, `${stageInfo(st).title} (${st})`)));
-  const expr = h("input", { type: "text", class: "code big", value: "-a*v - b*q", "aria-label": "equation", spellcheck: "false", "data-test": "equation" });
-  const constants = Object.fromEntries(CONSTANTS.map((c) => [c, h("input", { type: "number", step: "any", value: c === "a" ? 0.4 : c === "b" ? 2 : 0, "aria-label": `constant ${c}` })]));
-  const sweepSel = h("select", { "aria-label": "variable to sweep" });
-  const lo = h("input", { type: "number", step: "any", value: -1, "aria-label": "from" }), hi = h("input", { type: "number", step: "any", value: 1, "aria-label": "to" });
-  const atBox = h("div", { class: "row" });
-  const implicit = h("input", { type: "checkbox", checked: true });
-  const note = h("div", { class: "hint", "data-test": "eq-note" });
+  const left = h("section", { class: "card stack" }), right = h("section", { class: "card" });
   const added = h("div", { class: "hint", "data-test": "eq-added" });
-  const chart = new LineChart(h("div", {}), { title: "What the law gives back", xLabel: "q", yLabel: "value", zeroBased: false, height: 240 });
-  let variables = ["q", "v", "time"], at = {};
+  let forms = {}, editor = null;
 
-  const fillSweep = () => {
-    const keep = sweepSel.value || variables[0];
-    clear(sweepSel, variables.map((v) => h("option", { value: v, selected: v === keep }, v)));
-    clear(atBox, variables.filter((v) => v !== sweepSel.value).map((v) => field(`${v} held at`,
-      h("input", { type: "number", step: "any", value: at[v] ?? 0, onchange: (e) => { at[v] = Number(e.target.value); preview(); } }))));
+  const constantsRow = (initial) => {
+    const inputs = Object.fromEntries(CONSTANTS.map((c) => [c, h("input", { type: "number", step: "any", value: initial[c] ?? 0, "aria-label": `constant ${c}` })]));
+    return { inputs, row: h("div", { class: "row" }, CONSTANTS.map((c) => field(c, inputs[c]))), read: () => Object.fromEntries(CONSTANTS.map((c) => [c, Number(inputs[c].value)])) };
   };
-  sweepSel.addEventListener("change", () => { fillSweep(); preview(); });
-
-  const preview = debounce(async () => {
-    const body = { stage: stageSel.value, expr: expr.value, sweep: sweepSel.value || variables[0], lo: Number(lo.value), hi: Number(hi.value),
-                   at, n: 101, constants: Object.fromEntries(CONSTANTS.map((c) => [c, Number(constants[c].value)])) };
-    try {
-      const out = await post("/api/author/equation", body);
-      if (!out.ok) { note.className = "hint bad"; note.textContent = out.error; return; }
-      variables = out.variables; fillSweep();
-      chart.xLabel = out.sweep; chart.yLabel = "law output";
-      chart.set([{ id: "y", name: "law output", short: "law", cls: "custom", color: "var(--custom)", area: true, points: out.x.map((x, i) => [x, out.y[i]]) }]);
-      note.className = "hint";
-      note.textContent = out.finite ? "" : "Some values are not finite (division by zero, log of a negative, …).";
-      if (out.derivative && out.derivative.text) {
-        note.textContent += ` Slope with respect to ${out.derivative.of}: ${out.derivative.text}` +
-          (implicit.checked ? ", treated as implicit damping." : ".");
-      }
-    } catch (error) { note.className = "hint bad"; note.textContent = error.message; }
-  }, 250);
-  for (const el of [expr, lo, hi, stageSel, ...Object.values(constants)]) el.addEventListener("input", preview);
-
-  const use = button("Use in my experiment", { kind: "primary", iconName: "plus", test: "eq-use", onclick: () => {
+  const useButton = (build) => button("Use in my experiment", { kind: "primary", iconName: "plus", test: "eq-use", onclick: () => {
     const stage = stageSel.value, impl = implsFor(stage).find((i) => i.id === `${stage}/expression`);
     if (!impl) return;
-    const params = defaultParams(impl);
-    params.expr = expr.value;
-    for (const c of CONSTANTS) if (c in params) params[c] = Number(constants[c].value);
-    if ("implicit" in params) params.implicit = implicit.checked;
+    const params = { ...defaultParams(impl), ...build() };
     state.graph.stages[stage] = { impl: impl.id, params };
     setGraph({ ...state.graph, stages: { ...state.graph.stages } });
     clear(added, `Added to “${state.graph.name}”. `, h("button", { class: "link", type: "button", onclick: () => go.show("studio") }, "Watch it in Studio"));
   } });
+  const showError = (note, message) => { note.className = "hint bad"; note.textContent = message; };
 
-  root.append(h("div", { class: "split-even" },
-    h("section", { class: "card stack" }, h("header", { class: "card-head" }, h("h2", {}, "Write the law")),
-      h("p", { class: "hint" }, "Use q (position), v (velocity), time and the constants a to h. Functions: abs, atan, clamp, cos, exp, log, max, min, sin, sqrt, tan, tanh, where."),
-      field("Where it applies", stageSel),
-      field("Equation", expr),
-      h("div", { class: "row" }, CONSTANTS.map((c) => field(c, constants[c]))),
-      h("div", { class: "row" }, field("Sweep", sweepSel), field("from", lo), field("to", hi), atBox),
-      h("label", { class: "check" }, implicit, "Treat the slope in v as implicit damping (steadier at large damping)"),
-      h("div", { class: "row center" }, use), added),
-    h("section", { class: "card" }, h("header", { class: "card-head" }, h("h2", {}, "The curve"),
-      h("span", { class: "grow" }), h("span", { class: "hint" }, "updates as you type; no simulation yet")), chart.container, note)));
-  fillSweep(); preview();
+  // one law per element, one or several outputs
+  function pointwise(stage, form) {
+    const many = form.outputs.length > 1, d = DEFAULTS[stage] || { text: "0", constants: {} };
+    const text = many ? h("textarea", { class: "code short", rows: 7, spellcheck: "false", "aria-label": "equation", "data-test": "equation" }, d.text)
+                      : h("input", { type: "text", class: "code big", value: d.text, "aria-label": "equation", spellcheck: "false", "data-test": "equation" });
+    const consts = constantsRow(d.constants);
+    const sweepSel = h("select", { "aria-label": "variable to sweep" }), outSel = h("select", { "aria-label": "output to plot" }, form.outputs.map((o) => h("option", { value: o }, o)));
+    const lo = h("input", { type: "number", step: "any", value: -1, "aria-label": "from" }), hi = h("input", { type: "number", step: "any", value: 1, "aria-label": "to" });
+    const atBox = h("div", { class: "row" }), implicit = h("input", { type: "checkbox", checked: true });
+    const note = h("div", { class: "hint", "data-test": "eq-note" });
+    const chart = new LineChart(h("div", {}), { title: "What the law gives back", xLabel: form.inputs[0], yLabel: "value", zeroBased: false, height: 240 });
+    let at = {}, last = null, chosen = false;
+    const lineOf = () => {                                     // the right-hand side of the plotted output's line
+      if (!many) return text.value;
+      const line = text.value.split(/[\n;]/).find((l) => new RegExp(`^\\s*${outSel.value}\\s*=`).test(l));
+      return line ? line.slice(line.indexOf("=") + 1) : text.value;
+    };
+    const used = () => form.inputs.find((v) => new RegExp(`\\b${v}\\b`).test(lineOf())) || form.inputs[0];
+    const fillSweep = () => {
+      const keep = chosen ? sweepSel.value : used();
+      clear(sweepSel, form.inputs.map((v) => h("option", { value: v, selected: v === keep }, v)));
+      clear(atBox, form.inputs.filter((v) => v !== sweepSel.value).map((v) => field(`${v} held at`,
+        h("input", { type: "number", step: "any", value: at[v] ?? 0, onchange: (e) => { at[v] = Number(e.target.value); preview(); } }))));
+    };
+    const draw = () => {
+      if (!last) return;
+      const ys = last.outputs[outSel.value] || last.y;
+      chart.xLabel = last.sweep; chart.yLabel = many ? outSel.value : "law output";
+      chart.set([{ id: "y", name: many ? outSel.value : "law output", short: "law", cls: "custom", color: "var(--custom)", area: true, points: last.x.map((x, i) => [x, ys[i]]) }]);
+    };
+    const preview = debounce(async () => {
+      const body = { stage, expr: text.value, sweep: sweepSel.value || used(), lo: Number(lo.value), hi: Number(hi.value), at, n: 101, constants: consts.read() };
+      try {
+        const out = await post("/api/author/equation", body);
+        if (!out.ok) { showError(note, out.error); return; }
+        last = out; draw();
+        note.className = "hint";
+        note.textContent = out.finite ? "" : "Some values are not finite (division by zero, log of a negative, …).";
+        if (out.derivative && out.derivative.text) {
+          note.textContent += ` Slope with respect to ${out.derivative.of}: ${out.derivative.text}` + (implicit.checked ? ", treated as implicit damping." : ".");
+        }
+      } catch (error) { showError(note, error.message); }
+    }, 250);
+    sweepSel.addEventListener("change", () => { chosen = true; fillSweep(); preview(); });
+    outSel.addEventListener("change", () => { if (!chosen) fillSweep(); preview(); });
+    for (const el of [text, lo, hi, ...Object.values(consts.inputs)]) el.addEventListener("input", () => { if (!chosen) fillSweep(); preview(); });
+    const names = form.inputs.join(", ");
+    const hint = many
+      ? `Names: ${names} and the constants a to h. Write one line per output (${form.outputs.join(", ")}), like “${form.outputs[0]} = …”; an output you leave out is 0.`
+      : `Use ${names} and the constants a to h. Functions: abs, atan, clamp, cos, exp, log, max, min, sin, sqrt, tan, tanh, where.`;
+    fillSweep();
+    return {
+      left: [h("p", { class: "hint" }, hint), field("Equation", text), consts.row,
+        h("div", { class: "row" }, field("Sweep", sweepSel), field("from", lo), field("to", hi)),
+        h("details", {}, h("summary", { class: "hint" }, "Hold the other inputs at…"), atBox),
+        many ? h("div", { class: "row" }, field("Plot output", outSel)) : null,
+        form.slope ? h("label", { class: "check" }, implicit, `Treat the slope in ${form.slope} as implicit damping (steadier at large damping)`) : null,
+        h("div", { class: "row center" }, useButton(() => ({ expr: text.value, ...consts.read(), ...(form.slope ? { implicit: implicit.checked } : {}) })))],
+      right: [h("header", { class: "card-head" }, h("h2", {}, "The curve"), h("span", { class: "grow" }), h("span", { class: "hint" }, "updates as you type; no simulation yet")), chart.container, note],
+      update: preview,
+    };
+  }
+
+  // measured channels over the state
+  function channels(stage, form) {
+    const d = DEFAULTS[stage];
+    const text = h("textarea", { class: "code short", rows: 6, spellcheck: "false", "aria-label": "equation", "data-test": "equation" }, d.text);
+    const consts = constantsRow({}), entries = h("input", { type: "number", min: 1, max: 64, step: 1, value: 12, "aria-label": "sample entries" });
+    const note = h("div", { class: "hint", "data-test": "eq-note" }), table = h("div", { "data-test": "eq-channels" });
+    const preview = debounce(async () => {
+      try {
+        const out = await post("/api/author/equation", { stage, expr: text.value, constants: consts.read(), size: Number(entries.value) });
+        if (!out.ok) { showError(note, out.error); return; }
+        note.className = "hint"; note.textContent = out.finite ? "" : "A channel is not finite on the sample state.";
+        clear(table, h("table", {}, h("thead", {}, h("tr", {}, ["Channel", "Expression", "Value on the sample"].map((t) => h("th", {}, t)))),
+          h("tbody", {}, out.channels.map((c) => h("tr", {}, h("td", {}, c.label), h("td", { class: "code" }, c.text), h("td", {}, Number(c.value).toPrecision(5)))))),
+          h("p", { class: "hint" }, `Sample state: ${out.sample.entries} entries per array, seeded ${out.sample.seed}, time ${out.sample.time}.`));
+      } catch (error) { showError(note, error.message); }
+    }, 250);
+    for (const el of [text, entries, ...Object.values(consts.inputs)]) el.addEventListener("input", preview);
+    const arrays = Object.entries(form.arrays).map(([n, axis]) => `${n} (along ${axis})`).join(", ");
+    return {
+      left: [h("p", { class: "hint" }, `One line per measured column, “label = expression”. Arrays: ${arrays}; time is one number. ` +
+        `Collapse an array with ${form.reductions.join(", ")}, or take one entry with qvel[0]. A probe only watches: the simulation does not change.`),
+        field("Channels", text), consts.row, field("Sample entries per array", entries),
+        h("div", { class: "row center" }, useButton(() => ({ expr: text.value, ...consts.read() })))],
+      right: [h("header", { class: "card-head" }, h("h2", {}, "What it reads"), h("span", { class: "grow" }), h("span", { class: "hint" }, "on a made-up state, no simulation yet")), table, note],
+      update: preview,
+    };
+  }
+
+  // a solver step, run on a sample system
+  function iteration(stage, form) {
+    const init = h("textarea", { class: "code short", rows: 5, spellcheck: "false", "aria-label": "init", "data-test": "solver-init" }, form.default_init);
+    const step = h("textarea", { class: "code short", rows: 9, spellcheck: "false", "aria-label": "step", "data-test": "solver-step" }, form.default_step);
+    const consts = constantsRow({ a: 1 });
+    const iterations = h("input", { type: "number", min: 1, max: 200, step: 1, value: 20, "aria-label": "passes" });
+    const tolerance = h("input", { type: "number", min: 1e-7, max: 1, step: "any", value: 0.01, "aria-label": "tolerance" });
+    const size = h("input", { type: "number", min: 2, max: 64, step: 1, value: 16, "aria-label": "unknowns" });
+    const condition = h("input", { type: "number", min: 1, max: 1e8, step: "any", value: 100, "aria-label": "condition number" });
+    const preset = h("select", { "aria-label": "starting point" }, Object.keys(SOLVERS).map((k) => h("option", { value: k }, k)));
+    const note = h("div", { class: "hint", "data-test": "eq-note" });
+    const chart = new LineChart(h("div", {}), { title: "Residual after each pass", xLabel: "pass", yLabel: "log10 of |b − A x| / |b|", zeroBased: false, height: 240 });
+    const preview = debounce(async () => {
+      try {
+        const out = await post("/api/author/equation", { stage, init: init.value, step: step.value, iterations: Number(iterations.value),
+          constants: consts.read(), size: Number(size.value), condition: Number(condition.value) });
+        if (!out.ok) { showError(note, out.error); return; }
+        const log = (v) => Math.log10(Math.max(v, 1e-300)), claim = log(Number(tolerance.value));
+        const points = [[0, log(out.start)], ...out.residuals.map((r, i) => [i + 1, log(r)])];
+        chart.set([
+          { id: "res", name: "residual", short: "residual", cls: "custom", color: "var(--custom)", area: true, points },
+          { id: "claim", name: "the tolerance you claim", short: "claim", cls: "control", color: "var(--control)", dash: "5 4", points: [[0, claim], [points.length - 1, claim]] }]);
+        const reached = out.residuals.findIndex((r) => r <= Number(tolerance.value));
+        note.className = reached >= 0 ? "hint good" : "hint";
+        note.textContent = !out.finite ? "The program leaves the finite numbers: it diverges on this system." :
+          (reached >= 0 ? `Reaches the tolerance after pass ${reached + 1}. ` : `Not at the tolerance after ${out.residuals.length} passes: residual ${out.final.toExponential(2)}. `) +
+          `Final error against the direct solution: ${out.solution_error.toExponential(2)}.`;
+      } catch (error) { showError(note, error.message); }
+    }, 300);
+    preset.addEventListener("change", () => {
+      const p = SOLVERS[preset.value];
+      init.value = p.init ?? form.default_init; step.value = p.step ?? form.default_step;
+      for (const c of CONSTANTS) consts.inputs[c].value = p.constants[c] ?? 0;
+      preview();
+    });
+    for (const el of [init, step, iterations, tolerance, size, condition, ...Object.values(consts.inputs)]) el.addEventListener("input", preview);
+    return {
+      left: [h("p", { class: "hint" }, "Write the method as lines “name = expression”. init runs once, step runs every pass; x is the answer. " +
+        "You have rhs, diag (the diagonal of A), A @ name, n, k (the pass), the constants a to h, and dot, sum, norm, maxabs. " +
+        "It is judged as an approximate solve: it claims a tolerance and is held to it."),
+        field("Start from", preset), field("init (runs once)", init), field("step (runs every pass)", step), consts.row,
+        h("div", { class: "row" }, field("Passes", iterations), field("Claimed tolerance", tolerance)),
+        h("div", { class: "row" }, field("Sample unknowns", size), field("Sample condition number", condition)),
+        h("div", { class: "row center" }, useButton(() => ({ init: init.value, step: step.value, iterations: Number(iterations.value),
+          tolerance: Number(tolerance.value), ...consts.read() })))],
+      right: [h("header", { class: "card-head" }, h("h2", {}, "How it converges"), h("span", { class: "grow" }), h("span", { class: "hint" }, "on a random symmetric positive definite system")), chart.container, note],
+      update: preview,
+    };
+  }
+
+  const BUILDERS = { pointwise, channels, iteration };
+  function pick() {
+    const stage = stageSel.value, form = forms[stage];
+    clear(added);
+    if (!form) { clear(left, field("Where it applies", stageSel)); clear(right, h("p", { class: "hint bad" }, "This stage has no typed form.")); return; }
+    editor = BUILDERS[form.kind](stage, form);
+    clear(left, h("header", { class: "card-head" }, h("h2", {}, "Write the law")), field("Where it applies", stageSel), ...editor.left.filter(Boolean), added);
+    clear(right, ...editor.right);
+    editor.update();
+  }
+  stageSel.addEventListener("change", pick);
+  root.append(h("div", { class: "split-even" }, left, right));
+  get("/api/author/forms").then((f) => { forms = f; pick(); }).catch((error) => clear(left, h("p", { class: "hint bad" }, error.message)));
 }
 
 // ---- 3. the kernel ----

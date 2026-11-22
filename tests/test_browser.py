@@ -151,17 +151,61 @@ def test_choosing_an_example_in_build_writes_the_experiment_it_shows(page):
     assert "1 change" in page.eval("document.querySelector('[data-test=experiment] option[value=editor]').textContent")
 
 
-def test_an_equation_is_drawn_as_a_curve_before_any_simulation(page):
+def open_equation(page):
+    """The Build screen's equation tab. Its editor is made once the stage forms arrive, so wait for it."""
     tab(page, "build")
     click(page, "#tab-build .seg button[data-value=equation]")
-    if not page.eval("document.querySelector('[data-test=equation]') !== null"):
+    if not page.eval("document.querySelector('[data-test=eq-stage]') !== null"):
         pytest.skip("phost-author is not installed here")
+    assert page.wait("document.querySelector('[data-test=equation]') !== null || document.querySelector('[data-test=solver-step]') !== null", 10)
+
+
+def test_an_equation_is_drawn_as_a_curve_before_any_simulation(page):
+    open_equation(page)
     assert page.wait("document.querySelectorAll('#tab-build [data-pane=equation] .chart svg path').length >= 2", 10)
     click(page, "[data-test=eq-use]")
-    assert page.wait("document.querySelector('[data-test=eq-added]').textContent.includes('Added')")
+    assert page.wait("document.querySelector('[data-test=eq-added]')?.textContent.includes('Added')")
     tab(page, "build")
     click(page, "#tab-build .seg button[data-value=stages]")
     assert "expression" in page.eval("document.querySelector('#tab-build pre.json').textContent")
+
+
+def choose_stage(page, stage):
+    page.eval(f"(() => {{ const s = document.querySelector('[data-test=eq-stage]'); s.value = '{stage}'; "
+              "s.dispatchEvent(new Event('change', { bubbles: true })); })()")
+
+
+def test_a_wrench_is_typed_one_line_per_output_and_added_to_the_experiment(page):
+    open_equation(page)
+    choose_stage(page, "body.wrench")
+    assert page.wait("document.querySelector('textarea[data-test=equation]') !== null", 10)
+    assert page.wait("document.querySelectorAll('#tab-build [data-pane=equation] .chart svg path').length >= 2", 10)
+    assert page.eval("document.querySelector('[aria-label=\"output to plot\"]').options.length") == 6
+    click(page, "[data-test=eq-use]")
+    assert page.wait("document.querySelector('[data-test=eq-added]')?.textContent.includes('Added')")
+    click(page, "#tab-build .seg button[data-value=stages]")
+    assert page.wait("document.querySelector('#tab-build pre.json').textContent.includes('body.wrench/expression')", 10)
+
+
+def test_a_probe_lists_its_channels_with_their_values_on_a_sample_state(page):
+    open_equation(page)
+    choose_stage(page, "probe.state")
+    assert page.wait("document.querySelectorAll('[data-test=eq-channels] tbody tr').length === 3", 10)
+    page.eval("(() => { const t = document.querySelector('textarea[data-test=equation]'); t.value = 'qvel'; "
+              "t.dispatchEvent(new Event('input', { bubbles: true })); })()")
+    assert page.wait("document.querySelector('[data-test=eq-note]')?.textContent.includes('array along')", 10)
+
+
+def test_a_solver_step_is_drawn_as_a_residual_curve_and_says_when_it_reaches_the_tolerance(page):
+    open_equation(page)
+    choose_stage(page, "newton.linear_solve")
+    assert page.wait("document.querySelector('[data-test=solver-step]') !== null", 10)
+    assert page.wait("document.querySelector('[data-test=eq-note]')?.textContent.includes('Reaches the tolerance')", 15)
+    page.eval("(() => { const t = document.querySelector('[data-test=solver-step]'); t.value = 'x = x + 0.01*(rhs - A@x)/diag'; "
+              "t.dispatchEvent(new Event('input', { bubbles: true })); })()")
+    assert page.wait("document.querySelector('[data-test=eq-note]')?.textContent.includes('Not at the tolerance')", 15)
+    click(page, "[data-test=eq-use]")
+    assert page.wait("document.querySelector('[data-test=eq-added]')?.textContent.includes('Added')")
 
 
 def test_a_kernel_is_loaded_checked_in_the_sandbox_and_reported(page):
