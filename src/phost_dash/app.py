@@ -10,7 +10,7 @@ import os
 import subprocess
 import sys
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
@@ -119,6 +119,19 @@ class App:
             raise ApiError(400, f"not a graph: {error}" if not isinstance(error, ContractError) else str(error)) from None
         return graph
 
+    @staticmethod
+    def _for_scene(graph: GraphSpec, spec: Any, scene) -> GraphSpec:
+        """A graph the page built names no host: it runs on whichever simulator the scene does. One that names a host keeps
+        it, and the lab refuses it on a scene of another engine (a stage is bound to the host it was written for)."""
+        if isinstance(spec, Mapping) and "host" not in spec and graph.stages:
+            return replace(graph, host=scene.engine)
+        return graph
+
+    @staticmethod
+    def _need_mujoco(scene, what: str) -> None:
+        if scene.engine != "mjwarp":
+            raise ApiError(400, f"{what} needs MuJoCo; scene {scene.id!r} runs on the {scene.engine!r} engine")
+
     def validate(self, body: Mapping[str, Any]) -> dict:
         registry = self.registry()
         try:
@@ -226,7 +239,9 @@ class App:
         steps = body.get("steps", 20)
         if not (isinstance(steps, int) and not isinstance(steps, bool) and 1 <= steps <= MAX_STEPS):
             raise ApiError(400, f"steps is a whole number between 1 and {MAX_STEPS}")
-        frames = bool(body.get("frames", True)) and not scenes.get(scene_id).hidden
+        scene = scenes.get(scene_id)
+        graph = self._for_scene(graph, spec, scene)
+        frames = bool(body.get("frames", True)) and not scene.hidden and scene.engine == "mjwarp"      # only MuJoCo scenes are drawn
         job = self.jobs.submit("run", dict(graph=graph.to_dict(), scene=scene_id, worlds=worlds, steps=steps,
                                            frames=frames))
         return job.summary()
@@ -242,6 +257,7 @@ class App:
             raise ApiError(400, f"no scene {scene_id!r}")
         if scenes.get(scene_id).hidden:
             raise ApiError(403, "a held-out scene is never drawn")
+        self._need_mujoco(scenes.get(scene_id), "the live view")
         steps, every = body.get("steps", 300), body.get("every", 6)
         for name, value, high in (("steps", steps, MAX_LIVE_STEPS), ("every", every, 200)):
             if not (isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= high):
@@ -284,6 +300,7 @@ class App:
             raise ApiError(400, f"no scene {scene_id!r}")
         if scenes.get(scene_id).hidden:
             raise ApiError(403, "a held-out scene's timings are never shown")
+        self._need_mujoco(scenes.get(scene_id), "the phase profile")
         worlds = body.get("worlds", [1])
         if not (isinstance(worlds, list) and 1 <= len(worlds) <= 3
                 and all(isinstance(w, int) and not isinstance(w, bool) and 1 <= w <= MAX_WORLDS for w in worlds)):

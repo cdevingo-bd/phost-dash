@@ -435,3 +435,40 @@ def test_author_features_say_what_is_missing(app, monkeypatch):
     monkeypatch.setattr(module, "installed", lambda name: False)
     for call, arg in ((app.kernel_template, ()), (app.equation, ({},)), (app.equation_forms, ()), (app.start_check, ({},))):
         assert error_of(call, *arg).status == 501
+
+
+# ---- scenes on another engine ----
+
+def stage_graph(**extra):
+    return dict(version=1, name="eff", plugins=[], note="", stages={"control.law": dict(impl="control.law/pd", params={})}, **extra)
+
+
+def test_the_catalog_says_which_engine_each_scene_runs_on(app):
+    engines = {s["id"]: s["engine"] for s in app.catalog()["scenes"]}
+    assert engines["trampoline8:impact"] == "mjwarp" and engines["chain32:pluck"] == "chain"
+
+
+def test_a_graph_the_page_built_runs_on_the_engine_of_the_scene_it_is_run_on(app, runners):
+    run(app, graph=stage_graph(), scene="chain32:pluck", worlds=[1])
+    assert runners.calls[-1]["graph"]["host"] == "chain"
+    run(app, graph=stage_graph(), scene="trampoline8:impact", worlds=[1])
+    assert runners.calls[-1]["graph"]["host"] == "mjwarp"
+
+
+def test_a_graph_that_names_its_host_keeps_it_and_the_lab_decides(app, runners):
+    run(app, graph=stage_graph(host="mjwarp"), scene="chain32:pluck", worlds=[1])
+    assert runners.calls[-1]["graph"]["host"] == "mjwarp"
+
+
+def test_only_a_mujoco_scene_is_drawn(app, runners):
+    run(app, graph=stage_graph(), scene="chain32:pluck", worlds=[1], frames=True)
+    assert not runners.calls[-1]["frames"]
+    run(app, graph=stage_graph(), scene="trampoline8:impact", worlds=[1], frames=True)
+    assert runners.calls[-1]["frames"]
+
+
+def test_the_live_view_and_the_phase_profile_refuse_a_scene_that_is_not_mujoco(app):
+    live = error_of(app.start_live, dict(graph=stage_graph(), scene="chain32:pluck"))
+    assert live.status == 400 and "needs MuJoCo" in live.message and "'chain'" in live.message
+    profile = error_of(app.start_profile, dict(scene="chain32:pluck"))
+    assert profile.status == 400 and "needs MuJoCo" in profile.message
