@@ -27,6 +27,8 @@ export const STAGE_INFO = {
     blurb: "Turns joint position and velocity into actuator commands each step." },
   "probe.state": { title: "State probe", icon: "eye",
     blurb: "Reads the simulation each step without changing it." },
+  "body.wrench": { title: "Applied body forces", icon: "arrow",
+    blurb: "Forces and torques applied to bodies each step, as a function of their position and velocity." },
 };
 export const stageInfo = (name) => STAGE_INFO[name] || { title: name, icon: "cube", blurb: "" };
 
