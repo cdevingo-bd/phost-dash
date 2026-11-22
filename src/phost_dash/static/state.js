@@ -19,6 +19,8 @@ export const state = {
 export const STAGE_INFO = {
   "newton.linear_solve": { title: "Newton linear solve", icon: "bolt",
     blurb: "Solves for the Newton step on every iteration. A faster solver should give the same answer." },
+  "effective.solve": { title: "Flexible-body solve", icon: "layers",
+    blurb: "Under the discrete integrator, solves the stiffness system of flexible bodies each step. A direct solve should give the same answer; it only pays where the built-in iteration is slow." },
   "dof.passive_force": { title: "Passive joint forces", icon: "tool",
     blurb: "Springs, dampers and other forces that act on joints without being commanded." },
   "control.law": { title: "Controller", icon: "target",

@@ -245,8 +245,9 @@ class App:
         stage = body.get("stage", "newton.linear_solve")
         if stage not in {c.name for c in self.registry().contracts()}:
             raise ApiError(400, f"unknown stage {stage!r}")
+        from phost_author.submit import check_scene
         return self.jobs.submit("check", dict(source=source, stage=stage, entry=body.get("entry", "Runtime"),
-                                              params=body.get("params") or {}, scene=body.get("scene", "trampoline8:impact"),
+                                              params=body.get("params") or {}, scene=body.get("scene") or check_scene(stage),
                                               worlds=2)).summary()
 
     def start_reverify(self, body: Mapping[str, Any]) -> dict:

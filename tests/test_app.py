@@ -38,7 +38,7 @@ def test_info_states_the_accuracy_limit_the_page_judges_by(app):
 def test_the_catalog_lists_stages_implementations_and_scenes(app):
     catalog = app.catalog()
     stages = {c["name"] for c in catalog["registry"]["contracts"]}
-    assert {"newton.linear_solve", "dof.passive_force", "control.law", "probe.state"} <= stages
+    assert {"newton.linear_solve", "effective.solve", "dof.passive_force", "control.law", "probe.state"} <= stages
     assert any(i["id"] == "newton.linear_solve/native" for i in catalog["registry"]["impls"])
     assert any(s["id"] == "trampoline12:impact" for s in catalog["scenes"])
 
