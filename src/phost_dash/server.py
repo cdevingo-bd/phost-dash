@@ -198,6 +198,11 @@ class Dash(ThreadingHTTPServer):
         self.app, self.verbose = app, verbose
         self.guard = Guard(self.server_address[1], token)
 
+    def handle_error(self, request, client_address) -> None:
+        if isinstance(sys.exc_info()[1], (ConnectionError, TimeoutError)):
+            return                                            # a tab was closed or a stream dropped: no traceback for that
+        super().handle_error(request, client_address)
+
     @property
     def url(self) -> str:
         return self.guard.url()

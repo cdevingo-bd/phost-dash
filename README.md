@@ -1,10 +1,11 @@
 # phost-dash
 
-A dashboard for [phost](../phost) that runs on your own machine and your own GPU. Build a graph (which implementation
+A dashboard for [phost](https://github.com/cdevingo-bd/phost) that runs on your own machine and your own GPU. Build a graph (which implementation
 sits on which stage of the simulation step), watch it run next to native, time it, and rank the results.
 
 ```
-pip install phost phost-lab phost-score phost-dash   # plus phost-author for the Author tab
+# from clones of phost, phost-coupledchol, phost-lab, phost-author, phost-score and this repo (see the phost README):
+pip install -e ../phost -e ../phost-coupledchol -e ../phost-lab -e ../phost-author -e ../phost-score -e .
 phost-dash
 ```
 
@@ -14,19 +15,24 @@ and a CUDA GPU to run anything.
 
 ## What is in it
 
-- **Live**: the same scene is run twice from the same settled state, native on the left and your graph on the right,
-  drawn as it is computed. A third copy, native again, is stepped alongside as a yardstick: the GPU is not bitwise
-  repeatable, so "how far is the graph from native" only means something next to "how far is native from itself". Drag
-  to orbit, scrub or play back, and click the chart to jump. A separate **timed comparison** (with nothing streaming,
-  so the timing is clean) gives step time, speedup and accuracy per world count, with the checks that passed, and
-  records the result to the ledger.
-- **Graph**: the host and one node per stage, each with its swap class, its ports, an implementation choice and its
-  parameters. The graph is JSON; saved graphs are files.
-- **Author**: type an equation and see the curve before any simulation, or write a kernel and check it in a sandbox.
-  Either becomes a node.
-- **Board**: recorded runs, grouped so only like is compared with like, with the Pareto front marked and the trust
-  level of every row. A row can be re-run here and compared with what was recorded.
-- **Jobs**: everything that ran. Watching a job again replays its saved stream.
+Four screens, in the order you use them:
+
+- **Studio**: pick a scene and an experiment and press *Run comparison*. The same scene is run twice from the same
+  settled state, the reference on the left and your experiment on the right (or laid over each other), drawn as it is
+  computed. A third copy of the reference is stepped alongside as a yardstick: the GPU is not bitwise repeatable, so
+  "how far is the experiment from the reference" only means something next to "how far is the reference from itself".
+  Below the view, a plain-language verdict says whether the experiment kept the reference's answer. *Time it* is a
+  separate run with nothing streaming, so the timing is clean: it gives step time, speed against the reference and
+  accuracy per world count, with the checks that passed, and *Record to leaderboard* keeps it. Drag to orbit, scrub or
+  play back, and click the drift chart to jump.
+- **Build**: three workspaces. *Choose stages* shows each place in the physics step with the reference or an
+  alternative for it, its settings, and what kind of change it is (same answer, close answer, changes the physics,
+  read-only). *Type an equation* draws the curve of a force law before any simulation. *Write a kernel* checks your
+  code in a sandbox. Each ends as a choice in Studio. An experiment is plain JSON; saved ones are files.
+- **Results**: the leaderboard, grouped so only like is compared with like, with the best trade-offs marked and the trust
+  level of every row (a row can be re-run here and compared with what was recorded), and a history of everything that
+  ran. Opening a past watched run replays its saved stream.
+- **Guide**: what the words mean and what the numbers are worth.
 
 The built-in scene is `tank:boat`: a glass tank that shuttles side to side, a boat with a cloth sail and three crates on
 its deck. **The water is 150 frictionless spheres, not a fluid.** MuJoCo has no fluid solver; the boat floats because
@@ -63,7 +69,7 @@ phost-dash --plugin my_stages --scene-dir ./my-scenes      # your own stages and
 
 ```
 pip install -e '.[test]'
-pytest                      # ~200 tests with a fake runner: security, stores, jobs, HTTP, and the page itself
+pytest                      # ~230 tests with a fake runner: security, stores, jobs, HTTP, and the page itself
 pytest tests/test_real_gpu.py   # the same over real GPU runs (skipped without CUDA)
 ```
 

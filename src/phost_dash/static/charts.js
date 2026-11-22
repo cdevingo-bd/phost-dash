@@ -42,8 +42,8 @@ function sample(array, limit) {
 }
 
 export class LineChart {
-  constructor(container, { title, xLabel = "", yLabel = "", xFormat = num, yFormat = num, height = 240, onPick = null, zeroBased = true }) {
-    Object.assign(this, { container, title, xLabel, yLabel, xFormat, yFormat, height, onPick, zeroBased });
+  constructor(container, { title, xLabel = "", yLabel = "", xFormat = num, yFormat = num, height = 240, onPick = null, zeroBased = true, compact = false }) {
+    Object.assign(this, { container, title, xLabel, yLabel, xFormat, yFormat, height, onPick, zeroBased, compact });
     this.series = [];
     this.mark = null;
     track(this, container);
@@ -69,7 +69,7 @@ export class LineChart {
   render() {
     const { series, height, width: W } = this;
     this.markEl = null; this.xScale = null;
-    const m = { l: 56, r: 84, t: 24, b: 32 };
+    const m = this.compact ? { l: 48, r: 84, t: 14, b: 22 } : { l: 56, r: 84, t: 24, b: 32 };
     const points = series.flatMap((item) => item.points);
     const svg = s("svg", { viewBox: `0 0 ${W} ${height}`, role: "img", "aria-label": this.title });
     if (!points.length) {
@@ -93,13 +93,20 @@ export class LineChart {
     }
     for (const t of xt) axis.append(s("text", { x: X(t), y: height - m.b + 16, "text-anchor": "middle", class: "tick" }, this.xFormat(t)));
     axis.append(s("line", { x1: m.l, x2: W - m.r, y1: Y(y0), y2: Y(y0) }));
-    axis.append(s("text", { x: (m.l + W - m.r) / 2, y: height - 2, "text-anchor": "middle", class: "tick" }, this.xLabel));
-    axis.append(s("text", { x: 4, y: 12, class: "tick" }, this.yLabel));
+    if (!this.compact) {
+      axis.append(s("text", { x: (m.l + W - m.r) / 2, y: height - 2, "text-anchor": "middle", class: "tick" }, this.xLabel));
+      axis.append(s("text", { x: 4, y: 12, class: "tick" }, this.yLabel));
+    }
     svg.append(grid, axis);
 
     for (const item of series) {
       if (!item.points.length) continue;
       const d = item.points.map((p, i) => `${i ? "L" : "M"}${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join("");
+      if (item.area) {                                          // a faint wash under the line, to the baseline
+        const last = item.points[item.points.length - 1], first = item.points[0];
+        svg.append(s("path", { d: `${d}L${X(last[0]).toFixed(1)},${Y(y0).toFixed(1)}L${X(first[0]).toFixed(1)},${Y(y0).toFixed(1)}Z`,
+                               fill: item.color, opacity: 0.12, stroke: "none" }));
+      }
       svg.append(s("path", { d, fill: "none", stroke: item.color, "stroke-width": 2, "stroke-linejoin": "round",
                              "stroke-dasharray": item.dash || null }));
     }
@@ -150,7 +157,7 @@ export class LineChart {
     const rows = sample(lead.points, 40).map((p) => [this.xFormat(p[0]),
       ...series.map((item) => { const q = item.points.find((r) => r[0] === p[0]); return q ? this.yFormat(q[1]) : "–"; })]);
     clear(this.container, h("div", { class: "small muted" }, this.title), legend(series), svg,
-      tableView([this.xLabel || "x", ...series.map((i) => i.name)], rows));
+      this.compact ? null : tableView([this.xLabel || "x", ...series.map((i) => i.name)], rows));
   }
 }
 
@@ -245,7 +252,7 @@ export class Scatter {
       svg.append(dot);
     }
     const key = h("div", { class: "legend" },
-      h("span", {}, h("span", { class: "swatch", style: { background: "var(--native)" } }), "Pareto front"),
+      h("span", {}, h("span", { class: "swatch", style: { background: "var(--native)" } }), "Best trade-off"),
       h("span", {}, h("span", { class: "swatch", style: { border: "2px solid var(--muted)", background: "var(--surface)" } }), "beaten by another entry"));
     clear(this.container, h("div", { class: "small muted" }, this.title), key, svg,
       tableView(["entry", this.xLabel, this.yLabel], points.map((p) => [p.label, this.xFormat(p.x), this.yFormat(p.y)])));

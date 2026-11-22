@@ -93,7 +93,7 @@ class App:
     def info(self) -> dict:
         return dict(gpu=self._gpu(), packages={p: _version(p) for p in PACKAGES if _version(p)},
                     plugins=list(self.plugins), state=str(self.config.state), author=installed("phost_author"),
-                    render=self._can_render())
+                    render=self._can_render(), limits=dict(max_accuracy_ratio=RunConfig().max_accuracy_ratio))
 
     def _can_render(self) -> bool:
         return installed("mujoco")

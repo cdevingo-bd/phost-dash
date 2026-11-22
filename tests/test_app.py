@@ -30,6 +30,11 @@ def test_info_reports_gpu_packages_and_state(app, config):
     assert "phost" in info["packages"] and "phost-dash" in info["packages"]
 
 
+def test_info_states_the_accuracy_limit_the_page_judges_by(app):
+    from phost_lab.runner import RunConfig
+    assert app.info()["limits"]["max_accuracy_ratio"] == RunConfig().max_accuracy_ratio
+
+
 def test_the_catalog_lists_stages_implementations_and_scenes(app):
     catalog = app.catalog()
     stages = {c["name"] for c in catalog["registry"]["contracts"]}

@@ -95,3 +95,7 @@ export function showTip(event, rows) {
   el.style.top = `${Math.max(4, y)}px`;
 }
 export function hideTip() { tip().hidden = true; }
+
+export function section(title, subtitle, ...children) {
+  return h("section", { class: "panel" }, h("header", { class: "panel-head" }, h("h2", {}, title), subtitle ? h("p", {}, subtitle) : null), ...children);
+}

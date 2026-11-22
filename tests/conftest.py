@@ -68,6 +68,7 @@ class FakeRunners:
                 "cells": cells, "comparable_to_native": True, "pass": True}
 
     live_error = None
+    hold_live = False                       # emit the layout, then wait to be cancelled
 
     def live(self, request, emit, cancel):
         """A small scene a viewer can draw: a floor, a ball, a turning box and one flex triangle."""
@@ -79,6 +80,9 @@ class FakeRunners:
                  dict(type=6, size=[0.1, 0.05, 0.03], rgba=[.8, .3, .2, 1], body=2, turns=True)]
         flexes = [dict(dim=2, vertadr=0, vertnum=3, rgba=[.8, .8, .8, 1], tri=[[0, 1, 2]])]
         emit(dict(event="layout", scene=request["scene"], every=request["every"], timestep=0.002, geoms=geoms, flexes=flexes, bodies=3))
+        if self.hold_live:
+            cancel.wait(20)
+            return dict(error="cancelled")
         frames = 0
         for step in range(request["every"], request["steps"] + 1, request["every"]):
             if cancel.is_set():

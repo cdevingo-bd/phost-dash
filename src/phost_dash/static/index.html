@@ -9,20 +9,17 @@
 </head>
 <body>
 <header class="top">
-  <h1>phost</h1>
-  <span class="muted small">runs on this machine's GPU</span>
+  <a class="brand" href="#studio" aria-label="phost, home"><span class="mark" aria-hidden="true"></span><span class="brand-name">phost</span></a>
+  <nav class="tabs" role="tablist" id="tabs" aria-label="Sections"></nav>
   <span class="grow"></span>
-  <span id="gpu-chip" class="chip"><span class="dot"></span><span class="text">GPU …</span></span>
-  <span id="ledger-chip" class="chip"><span class="dot"></span><span class="text">ledger …</span></span>
-  <button id="theme" class="btn small" type="button" title="Switch between the system, light and dark themes">Theme: system</button>
+  <div class="status-row" id="status-row"></div>
+  <button id="theme" class="icon-btn" type="button" title="Theme: system" aria-label="Switch between the system, light and dark themes"></button>
 </header>
-<nav class="tabs" role="tablist" id="tabs"></nav>
 <main>
-  <section id="tab-live" role="tabpanel" hidden></section>
-  <section id="tab-graph" role="tabpanel" hidden></section>
-  <section id="tab-author" role="tabpanel" hidden></section>
-  <section id="tab-board" role="tabpanel" hidden></section>
-  <section id="tab-jobs" role="tabpanel" hidden></section>
+  <section id="tab-studio" role="tabpanel" hidden></section>
+  <section id="tab-build" role="tabpanel" hidden></section>
+  <section id="tab-results" role="tabpanel" hidden></section>
+  <section id="tab-guide" role="tabpanel" hidden></section>
   <p class="footnote" id="footnote"></p>
 </main>
 <div id="tip" role="tooltip" hidden></div>

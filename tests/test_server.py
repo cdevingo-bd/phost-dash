@@ -15,6 +15,19 @@ def test_it_listens_on_loopback_only(dash):
     assert dash.server_address[0] == "127.0.0.1"
 
 
+def test_a_browser_that_goes_away_does_not_print_a_traceback(dash, capsys):
+    try:
+        raise ConnectionResetError("tab closed")
+    except ConnectionResetError:
+        dash.handle_error(None, ("127.0.0.1", 1))
+    assert capsys.readouterr().err == ""
+    try:
+        raise ValueError("a real bug")
+    except ValueError:
+        dash.handle_error(None, ("127.0.0.1", 1))
+    assert "a real bug" in capsys.readouterr().err                 # anything else is still reported
+
+
 def test_the_printed_address_logs_in_once_then_hides_the_token(dash):
     anonymous = Client(dash, authenticated=False)
     response, _ = anonymous.request("GET", f"/?token={TOKEN}")

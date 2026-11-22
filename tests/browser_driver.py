@@ -33,7 +33,7 @@ class Page:
             raise RuntimeError("chrome did not start")
         self.ws = websocket.create_connection(target["webSocketDebuggerUrl"], timeout=60, suppress_origin=True)
         self.websocket = websocket
-        self.counter, self.problems = 0, []
+        self.counter, self.problems, self.size = 0, [], size
         for method in ("Page.enable", "Runtime.enable", "Log.enable", "Network.enable"):
             self.send(method)
         self.send("Emulation.setDeviceMetricsOverride", width=size[0], height=size[1], deviceScaleFactor=1, mobile=False)
@@ -91,6 +91,20 @@ class Page:
 
     def click_button(self, tab, text):
         self.eval(f"[...document.querySelectorAll('#tab-{tab} button')].find(b => b.textContent === {text!r}).click()")
+
+    def screenshot(self, path, full=False):
+        import base64
+        height = self.eval("Math.max(document.documentElement.scrollHeight, 900)") if full else None
+        if height:
+            self.send("Emulation.setDeviceMetricsOverride", width=self.size[0], height=int(height), deviceScaleFactor=1, mobile=False)
+        data = self.send("Page.captureScreenshot", format="png")["data"]
+        if height:
+            self.send("Emulation.setDeviceMetricsOverride", width=self.size[0], height=self.size[1], deviceScaleFactor=1, mobile=False)
+        with open(path, "wb") as out:
+            out.write(base64.b64decode(data))
+
+    def set_scheme(self, scheme):
+        self.send("Emulation.setEmulatedMedia", features=[dict(name="prefers-color-scheme", value=scheme)])
 
     def close(self):
         try:
