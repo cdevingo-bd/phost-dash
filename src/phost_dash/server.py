@@ -41,6 +41,7 @@ ROUTES = [
     ("POST", r"/api/jobs/run", lambda a, m, q, b: a.start_run(b)),
     ("POST", r"/api/jobs/live", lambda a, m, q, b: a.start_live(b)),
     ("POST", r"/api/jobs/reverify", lambda a, m, q, b: a.start_reverify(b)),
+    ("POST", r"/api/jobs/analysis", lambda a, m, q, b: a.start_analysis(b)),
     ("GET", r"/api/jobs", lambda a, m, q, b: a.list_jobs()),
     ("GET", r"/api/jobs/([0-9a-f]{12})", lambda a, m, q, b: a.get_job(m[1])),
     ("POST", r"/api/jobs/([0-9a-f]{12})/cancel", lambda a, m, q, b: a.cancel(m[1])),

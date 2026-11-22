@@ -102,6 +102,25 @@ class FakeRunners:
     def check(self, request, emit, cancel):
         return dict(ok=True, verdict=dict(ok=True), sandbox="fake")
 
+    def analysis(self, request, emit, cancel):
+        self.calls.append(request)
+        stage = lambda cls, applies=True, **kw: {
+            **dict(swap_class=cls, applies=applies, native_ms=None, share=None, ceiling=None, enclosing=None,
+                   reason=None if applies else "the host only calls this solve with the discrete integrator"), **kw}
+        stages = {
+            "newton.linear_solve": stage("exact", native_ms=1.1, share=0.63, enclosing="the solver phase (solver.solve)"),
+            "effective.solve": stage("exact", native_ms=0.149, share=0.08, ceiling=1.09),
+            "dof.passive_force": stage("model_changing", native_ms=0.035, share=0.02),
+            "probe.state": stage("observer"),
+            "control.law": stage("model_changing", applies=False),
+        }
+        structure = dict(n=330, nnz=9678, density=0.089, coupled=300, bandwidth=65, bandwidth_rcm=59,
+                         dense_flops=1.2e7, coupled_flops=9.0e6, banded_flops=1.15e6)
+        return dict(opportunities=dict(scene=request["scene"], cells=[dict(worlds=1, nv=330, integrator="discrete", step_ms=1.76,
+                                                                           launch_floor_ms=0.004, stages=stages)]),
+                    structure=dict(scene=request["scene"], nv=330, integrator="discrete", stages={
+                        "effective.solve": dict(applies=True, reason=None, structure=structure)}))
+
 
 @pytest.fixture
 def runners():
@@ -115,8 +134,8 @@ def config(tmp_path):
 
 @pytest.fixture
 def app(config, runners):
-    app = App(config, runners=dict(run=runners.run, live=runners.live, reverify=runners.reverify,
-                                   render=runners.render, check=runners.check), gpu_status=lambda: FAKE_GPU)
+    app = App(config, runners=dict(run=runners.run, live=runners.live, reverify=runners.reverify, render=runners.render,
+                                   check=runners.check, analysis=runners.analysis), gpu_status=lambda: FAKE_GPU)
     yield app
     app.close()
 
@@ -177,8 +196,8 @@ class Client:
 def dash(config, runners):
     server = serve(config, token=TOKEN)
     server.app.close()                                         # swap in fakes before serving
-    server.app = App(config, runners=dict(run=runners.run, live=runners.live, reverify=runners.reverify,
-                                           render=runners.render, check=runners.check), gpu_status=lambda: FAKE_GPU)
+    server.app = App(config, runners=dict(run=runners.run, live=runners.live, reverify=runners.reverify, render=runners.render,
+                                           check=runners.check, analysis=runners.analysis), gpu_status=lambda: FAKE_GPU)
     serve_in_thread(server)
     yield server
     server.shutdown_all()

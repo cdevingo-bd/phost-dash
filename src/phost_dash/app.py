@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 
 from phost import ContractError, Registry
-from phost_lab import GraphSpec
+from phost_lab import NATIVE, GraphSpec
 from phost_lab.bootstrap import load_registry, load_scenes
 from phost_lab.isolate import run_isolated
 from phost_lab.runner import RunConfig, comparable_to_native, stage_classes
@@ -73,7 +73,7 @@ class App:
         self._lock = threading.Lock()
         self.jobs = JobManager(self.store, runners if runners is not None else {
             "run": self._run, "live": self._live, "reverify": self._reverify, "render": self._render,
-            "check": self._check})
+            "check": self._check, "analysis": self._analysis})
 
     def close(self) -> None:
         self.jobs.close()
@@ -249,6 +249,21 @@ class App:
                                               params=body.get("params") or {}, scene=body.get("scene"),
                                               worlds=2)).summary()
 
+    def start_analysis(self, body: Mapping[str, Any]) -> dict:
+        """Where a change could pay on a scene: each stage's share of the step and its speedup ceiling, where it applies, and
+        the structure of its system matrix. Measured in a worker, on this machine's GPU. Never for a held-out scene."""
+        scenes = self.scenes()
+        scene_id = body.get("scene")
+        if scene_id not in scenes.ids():
+            raise ApiError(400, f"no scene {scene_id!r}")
+        if scenes.get(scene_id).hidden:
+            raise ApiError(403, "a held-out scene's structure and timings are never shown")
+        worlds = body.get("worlds", [1])
+        if not (isinstance(worlds, list) and 1 <= len(worlds) <= 3
+                and all(isinstance(w, int) and not isinstance(w, bool) and 1 <= w <= MAX_WORLDS for w in worlds)):
+            raise ApiError(400, f"worlds is a list of 1 to 3 whole numbers between 1 and {MAX_WORLDS}")
+        return self.jobs.submit("analysis", dict(scene=scene_id, worlds=worlds)).summary()
+
     def start_reverify(self, body: Mapping[str, Any]) -> dict:
         seq = body.get("seq")
         if not isinstance(seq, int) or isinstance(seq, bool):
@@ -361,6 +376,13 @@ class App:
                             plugins=self._worker_plugins(), scene_modules=self.config.scene_modules,
                             scene_dirs=self.config.scene_dirs, timeout=self.config.job_timeout, on_progress=emit,
                             cancel=cancel, env=self._env(), live=dict(steps=request["steps"], every=request["every"]))
+
+    def _analysis(self, request, emit, cancel) -> dict:
+        emit(dict(event="start", what="measuring each stage's share of the step"))
+        return run_isolated(NATIVE, request["scene"], RunConfig(), plugins=self._worker_plugins(),
+                            scene_modules=self.config.scene_modules, scene_dirs=self.config.scene_dirs,
+                            timeout=self.config.job_timeout, on_progress=emit, cancel=cancel, env=self._env(),
+                            report=dict(kinds=["opportunities", "structure"], worlds=request["worlds"]))
 
     def _reverify(self, request, emit, cancel) -> dict:
         record = next(r for r in self.ledger.records(strict=False) if r.seq == request["seq"])

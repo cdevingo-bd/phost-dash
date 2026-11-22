@@ -317,3 +317,18 @@ input.code { width: 100%; }
 .guide .card p + p { margin-top: 8px; }
 
 @media (prefers-reduced-motion: reduce) { .bar-fill { transition: none; } }
+
+/* where a change could pay */
+.analysis .card-head { align-items: end; flex-wrap: wrap; }
+.analysis .card-head .field { margin: 0; }
+.opp-table th { text-align: left; font-weight: 600; color: var(--ink-2); font-size: 12px; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+.opp-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.opp-table tr.off td { color: var(--ink-2); }
+.opp-table .num { font-variant-numeric: tabular-nums; white-space: nowrap; text-align: left; }
+.opp-table .strong { font-weight: 650; }
+.opp-table .note { color: var(--ink-2); font-size: 12px; max-width: 320px; }
+.opp-table .share { min-width: 150px; }
+.opp-table .share .bar { height: 6px; margin-bottom: 3px; }
+.opp-table code { font-size: 11px; color: var(--ink-2); }
+.structure h3 { font-size: 14px; margin: 14px 0 4px; }
+.structure p { margin: 4px 0; font-size: 13px; }

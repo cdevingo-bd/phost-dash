@@ -179,6 +179,42 @@ def test_a_live_watch_defaults_to_a_short_stream(app, runners):
     assert (runners.calls[0]["steps"], runners.calls[0]["every"]) == (300, 6)
 
 
+# ---- where a change could pay ----
+
+def test_an_analysis_goes_to_the_runner_with_its_scene_and_worlds(app, runners):
+    job = finished(app, app.start_analysis(dict(scene="trampoline8:discrete", worlds=[1, 8]))["id"])
+    request, = runners.calls
+    assert job["kind"] == "analysis" and job["status"] == "done"
+    assert (request["scene"], request["worlds"]) == ("trampoline8:discrete", [1, 8])
+    assert job["request"] == dict(scene="trampoline8:discrete", worlds=[1, 8])           # what the job list shows
+    stored = app.store.load_job(job["id"])
+    assert stored["result"]["opportunities"]["cells"][0]["stages"]["effective.solve"]["ceiling"] == 1.09
+
+
+@pytest.mark.parametrize("over,message", [
+    (dict(scene="nope"), "no scene"), (dict(worlds=[]), "worlds"), (dict(worlds=[0]), "worlds"), (dict(worlds=[1, 2, 3, 4]), "worlds"),
+    (dict(worlds="1"), "worlds"), (dict(worlds=[True]), "worlds"),
+])
+def test_an_analysis_request_is_checked_before_anything_is_queued(app, runners, over, message):
+    body = dict(scene="trampoline8:impact", worlds=[1])
+    body.update(over)
+    assert message in error_of(app.start_analysis, body).message
+    assert app.list_jobs() == [] and runners.calls == []
+
+
+def test_a_held_out_scene_is_never_analysed(config, runners, tmp_path):
+    from phost_dash import App
+    (tmp_path / "s").mkdir()
+    (tmp_path / "s" / "held.xml").write_text("<mujoco/>")
+    (tmp_path / "s" / "held.json").write_text(json.dumps(dict(hidden=True)))
+    held = App(type(config)(state=config.state, scene_dirs=(str(tmp_path / "s"),)), runners=dict(analysis=runners.analysis))
+    try:
+        assert error_of(held.start_analysis, dict(scene="held")).status == 403
+        assert held.list_jobs() == [] and runners.calls == []
+    finally:
+        held.close()
+
+
 # ---- jobs ----
 
 def test_jobs_are_listed_and_fetched_without_their_event_log(app):

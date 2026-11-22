@@ -193,6 +193,22 @@ def test_a_check_that_does_not_apply_is_not_shown_as_a_failure(page, dash):
     assert "not judged" in page.eval("document.querySelector('[data-test=timed]').textContent")
 
 
+def test_the_opportunity_card_says_how_much_each_stage_could_give_and_why_not(page):
+    tab(page, "build")
+    click(page, "[data-test=analysis-run]")
+    assert page.wait("document.querySelector('[data-test=analysis-table] tbody tr') !== null", 20)
+    rows = page.eval("[...document.querySelectorAll('[data-test=analysis-table] tbody tr')].map(r => r.dataset.stage + '|' + r.textContent)")
+    text = {r.split("|")[0]: r.split("|")[1] for r in rows}
+    assert "1.09×" in text["effective.solve"] and "8%" in text["effective.solve"]
+    assert "≤" in text["newton.linear_solve"] and "upper bound" in text["newton.linear_solve"]
+    assert "×" not in text["newton.linear_solve"]                # an upper bound is not given as a ceiling
+    assert "Not on this scene" in text["control.law"] and "discrete integrator" in text["control.law"]
+    assert "nothing to time" in text["probe.state"]
+    assert "not what it is for" in text["dof.passive_force"]
+    assert "330 × 330" in page.eval("document.querySelector('[data-test=analysis-structure]').textContent")
+    assert page.problems == []
+
+
 def test_a_stored_watch_replays_with_its_own_scene_and_graph(page):
     watch(page)
     watched = page.eval("document.querySelector('[data-test=scene]').value")
