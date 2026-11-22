@@ -1,7 +1,8 @@
 # phost-dash
 
-A dashboard for [phost](https://github.com/cdevingo-bd/phost) that runs on your own machine and your own GPU. Build a graph (which implementation
-sits on which stage of the simulation step), watch it run next to native, time it, and rank the results.
+A local browser dashboard for [phost](https://github.com/cdevingo-bd/phost). Build a graph (which implementation sits on which
+stage of the simulation step), run it beside native on your own GPU, time it, and rank the results. The dashboard runs no GPU
+work itself: [phost-lab](https://github.com/cdevingo-bd/phost-lab)'s workers do.
 
 ```
 # from clones of phost, phost-coupledchol, phost-lab, phost-author, phost-score and this repo (see the phost README):

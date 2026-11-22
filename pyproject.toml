@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "phost-dash"
 version = "0.1.0.dev0"
-description = "A local dashboard for phost: edit a graph, run it on your own GPU, watch it, and rank the results"
+description = "A local browser dashboard for phost: build a graph of swaps, run it beside native on your GPU, time it, and rank the results."
 readme = "README.md"
 requires-python = ">=3.10"
 license = {file = "LICENSE"}
