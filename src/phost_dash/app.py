@@ -18,7 +18,7 @@ from typing import Any, Callable, Mapping
 from phost import ContractError, Registry
 from phost_lab import NATIVE, GraphSpec
 from phost_lab.bootstrap import load_registry, load_scenes
-from phost_lab.engine import require_capability, supports
+from phost_lab.engine import can_render, require_capability, supports
 from phost_lab.isolate import run_isolated
 from phost_lab.runner import RunConfig, comparable_to_native, stage_classes
 from phost_score import Entry, Ledger, SELF_REPORTED, leaderboard, make_entries, reverify, wins as score_wins
@@ -98,7 +98,7 @@ class App:
                     render=self._can_render(), limits=dict(max_accuracy_ratio=RunConfig().max_accuracy_ratio))
 
     def _can_render(self) -> bool:
-        return installed("mujoco")
+        return can_render()                                 # some engine that draws frames has what it needs on this machine
 
     def research(self) -> dict:
         """What the agent layer (phost-agent) has done on this machine: the funnel its proposals went through, what its memo
@@ -258,7 +258,7 @@ class App:
             raise ApiError(400, f"steps is a whole number between 1 and {MAX_STEPS}")
         scene = scenes.get(scene_id)
         graph = self._for_scene(graph, spec, scene)
-        frames = bool(body.get("frames", True)) and not scene.hidden and supports(scene, "render")      # only MuJoCo scenes are drawn as images
+        frames = bool(body.get("frames", True)) and not scene.hidden and supports(scene, "render")      # only a scene whose engine draws frames is recorded as pictures
         job = self.jobs.submit("run", dict(graph=graph.to_dict(), scene=scene_id, worlds=worlds, steps=steps,
                                            frames=frames))
         return job.summary()
@@ -598,9 +598,9 @@ class App:
         out = self.store.job_dir(request["job"]) / "frames"
         for stale in out.glob("*.png") if out.is_dir() else ():
             stale.unlink()
-        spec = dict(xml=self.scenes().get(request["scene"]).xml(), frames=cell["frames"], width=480, height=320,
-                    out=str(out))
-        env = dict(os.environ, MUJOCO_GL="egl", PYTHONPATH=os.pathsep.join(p for p in sys.path if p))
+        spec = dict(scene=request["scene"], scene_modules=list(self.config.scene_modules),
+                    scene_dirs=[str(d) for d in self.config.scene_dirs], frames=cell["frames"], width=480, height=320, out=str(out))
+        env = dict(os.environ, PYTHONPATH=os.pathsep.join(p for p in sys.path if p))
         emit(dict(event="start", what=f"drawing {len(cell['frames'])} frames"))
         done = subprocess.run([sys.executable, "-m", "phost_dash.render"], input=json.dumps(spec), capture_output=True,
                               text=True, env=env, timeout=300)

@@ -37,6 +37,14 @@ def test_the_png_encoder_round_trips_pixels():
     assert (decode(png(image)) == image).all()
 
 
+def scene_in(tmp_path, xml, name="ball"):
+    """A scene directory holding one MJCF scene: the request names the scene and the directory, never the simulator."""
+    folder = tmp_path / "scenes"
+    folder.mkdir(exist_ok=True)
+    (folder / f"{name}.xml").write_text(xml)
+    return dict(scene=name, scene_dirs=[str(folder)])
+
+
 def run_render(request):
     done = subprocess.run([sys.executable, "-m", "phost_dash.render"], input=json.dumps(request), capture_output=True,
                           text=True, env=dict(os.environ, MUJOCO_GL="egl"), timeout=120)
@@ -56,7 +64,7 @@ def test_frames_are_drawn_to_numbered_pngs_that_differ_when_the_motion_does(tmp_
     if not egl_works():
         pytest.skip("no EGL offscreen rendering here")
     frames = [[0, 0, 1.0, 1, 0, 0, 0], [0, 0, 0.3, 1, 0, 0, 0]]
-    result, _ = run_render(dict(xml=SPHERE, frames=frames, width=160, height=120, out=str(tmp_path / "f")))
+    result, _ = run_render(dict(scene_in(tmp_path, SPHERE), frames=frames, width=160, height=120, out=str(tmp_path / "f")))
     assert result == dict(count=2, width=160, height=120)
     first, second = (decode((tmp_path / "f" / f"{i}.png").read_bytes()) for i in (0, 1))
     assert first.shape == (120, 160, 3) and first.std() > 1 and (first != second).any()
@@ -68,11 +76,18 @@ def test_frames_are_drawn_to_numbered_pngs_that_differ_when_the_motion_does(tmp_
 def test_a_frame_of_the_wrong_length_is_an_error_line_not_a_crash(tmp_path):
     if not egl_works():
         pytest.skip("no EGL offscreen rendering here")
-    result, done = run_render(dict(xml=SPHERE, frames=[[0.0, 1.0]], width=64, height=48, out=str(tmp_path / "f")))
+    result, done = run_render(dict(scene_in(tmp_path, SPHERE), frames=[[0.0, 1.0]], width=64, height=48, out=str(tmp_path / "f")))
     assert "has 2 values; the model has nq=7" in result["error"] and done.returncode == 1
 
 
 def test_a_model_that_does_not_parse_is_an_error_line(tmp_path):
     pytest.importorskip("mujoco")
-    result, _ = run_render(dict(xml="<mujoco><nonsense/></mujoco>", frames=[[]], width=64, height=48, out=str(tmp_path / "f")))
+    result, _ = run_render(dict(scene_in(tmp_path, "<mujoco><nonsense/></mujoco>"), frames=[[]], width=64, height=48, out=str(tmp_path / "f")))
     assert "error" in result
+
+
+def test_a_scene_whose_engine_draws_nothing_is_an_error_line_naming_the_engines_that_draw(tmp_path):
+    """The renderer asks the scene's engine; it is not MuJoCo's by default. A chain scene has nothing to draw with."""
+    result, done = run_render(dict(scene="chain32:pluck", frames=[[0.0]], width=64, height=48, out=str(tmp_path / "f")))
+    assert "not offered by the 'chain' engine" in result["error"] and "mjwarp" in result["error"] and done.returncode == 1
+    assert not (tmp_path / "f").exists()

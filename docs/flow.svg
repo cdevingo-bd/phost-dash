@@ -126,6 +126,6 @@
 <text x="24" y="650" class="head" text-anchor="start">What runs where</text>
 <text x="24" y="672" class="small" text-anchor="start">The dashboard runs on a scene of any engine the lab has. A MuJoCo scene needs mujoco, mujoco-warp and a CUDA GPU. The chain scenes need neither:</text>
 <text x="24" y="686" class="small" text-anchor="start">run, live, profile and analysis jobs were run on the NumPy chain on the CPU, with no MuJoCo or Warp installed. The JAX chain needs jax.</text>
-<text x="24" y="700" class="small" text-anchor="start">Pictures of a run are drawn for MuJoCo scenes only. A tool an engine does not declare (live, profile) is refused, naming the engines that do.</text>
+<text x="24" y="700" class="small" text-anchor="start">Pictures of a run are drawn by the scene's engine (MuJoCo's renderer for mjwarp; the chains draw none). A tool an engine does not declare is refused.</text>
 <text x="24" y="722" class="small" text-anchor="start">Timings are comparable only on a quiet device: the header shows who else is using the GPU, and a run is flagged unreliable if the two native timings disagree.</text>
 </svg>

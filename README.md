@@ -19,7 +19,8 @@ What a scene needs depends on its engine. A MuJoCo scene needs `mujoco`, `mujoco
 (`chain32:pluck`, `chain256:ringing`) need only NumPy and run on the CPU; `jaxchain32:pluck` needs `jax`. The page opens on
 `tank:boat`, a MuJoCo scene, so on a machine without MuJoCo pick a chain scene in the scene list first. Run, live view,
 phase profile and *where a change could pay* were run through the dashboard on the NumPy chain with no MuJoCo or Warp installed.
-Pictures of a run (the rendered frames) are drawn for MuJoCo scenes only.
+Pictures of a run are drawn by the scene's engine (`phost_lab.engine.render_frames`): the MuJoCo engine draws them with MuJoCo's
+offscreen renderer, which needs `mujoco` but not CUDA, and the chains have nothing to draw with, so a chain run records no frames.
 
 ## What is in it
 

@@ -1,15 +1,16 @@
-"""Draw a recorded motion as pictures, with MuJoCo's own offscreen renderer on this machine's GPU (EGL).
+"""Draw a recorded motion as pictures. The scene's engine draws each frame (``phost_lab.engine.render_frames``); this file only
+encodes the pictures as PNG files, so it knows no simulator.
 
 Run as a subprocess (``python -m phost_dash.render``): it reads one JSON request on stdin, writes ``<n>.png`` files, and
-prints one result line. A separate process keeps a GL context and its memory out of the dashboard.
+prints one result line. A separate process keeps an engine's drawing context and its memory out of the dashboard.
 
-Request: ``{xml, frames: [[qpos...], ...], width, height, out}``. Result: ``{count, width, height}`` or ``{error}``.
+Request: ``{scene, scene_modules, scene_dirs, frames: [[coordinate...], ...], width, height, out}``.
+Result: ``{count, width, height}`` or ``{error}``.
 """
 
 from __future__ import annotations
 
 import json
-import os
 import struct
 import sys
 import zlib
@@ -31,39 +32,25 @@ def png(rgb) -> bytes:
             + chunk(b"IDAT", zlib.compress(raw, 6)) + chunk(b"IEND", b""))
 
 
-def render(xml: str, frames, width: int, height: int, out: Path) -> dict:
-    import mujoco
-    import numpy as np
+def render(scene, frames, width: int, height: int, out: Path) -> dict:
+    from phost_lab.engine import render_frames
 
-    model = mujoco.MjModel.from_xml_string(xml)
-    data = mujoco.MjData(model)
+    images = render_frames(scene, frames, width, height)        # refuses here, before anything is written, if the engine cannot draw
     out.mkdir(parents=True, exist_ok=True)
-    camera = mujoco.MjvCamera()
-    mujoco.mjv_defaultFreeCamera(model, camera)
-    camera.lookat[:] = model.stat.center
-    camera.distance = 2.4 * model.stat.extent
-    camera.elevation, camera.azimuth = -25, 130
-    renderer = mujoco.Renderer(model, height=height, width=width)
-    try:
-        for index, frame in enumerate(frames):
-            qpos = np.asarray(frame, dtype=np.float64)
-            if qpos.shape != (model.nq,):
-                raise ValueError(f"frame {index} has {qpos.size} values; the model has nq={model.nq}")
-            data.qpos[:] = qpos
-            mujoco.mj_forward(model, data)
-            renderer.update_scene(data, camera=camera)
-            (out / f"{index}.png").write_bytes(png(renderer.render()))
-    finally:
-        renderer.close()
-    return dict(count=len(frames), width=width, height=height)
+    count = 0
+    for index, image in enumerate(images):
+        (out / f"{index}.png").write_bytes(png(image))
+        count += 1
+    return dict(count=count, width=width, height=height)
 
 
 def main() -> int:
-    os.environ.setdefault("MUJOCO_GL", "egl")
     request = json.loads(sys.stdin.read())
     try:
-        result = render(request["xml"], request["frames"], int(request["width"]), int(request["height"]),
-                        Path(request["out"]))
+        from phost_lab.bootstrap import load_scenes
+
+        scene = load_scenes(request.get("scene_modules", ()), request.get("scene_dirs", ())).get(request["scene"])
+        result = render(scene, request["frames"], int(request["width"]), int(request["height"]), Path(request["out"]))
     except BaseException as error:
         result = dict(error=f"{type(error).__name__}: {error}")
     print(PREFIX + json.dumps(result), flush=True)
