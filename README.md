@@ -1,8 +1,10 @@
 # phost-dash
 
 A local browser dashboard for [phost](https://github.com/cdevingo-bd/phost). Build a graph (which implementation sits on which
-stage of the simulation step), run it beside native on your own GPU, time it, and rank the results. The dashboard runs no GPU
-work itself: [phost-lab](https://github.com/cdevingo-bd/phost-lab)'s workers do.
+stage of the simulation step), run it beside native on a scene, time it, and rank the results. The dashboard runs no simulation
+itself: [phost-lab](https://github.com/cdevingo-bd/phost-lab)'s workers do, on whichever engine the scene names.
+
+![The browser's five screens talk over HTTP to a loopback-only server: a guard on every request, an App of plain methods, and a job queue that runs one job at a time. Each job runs in a phost-lab worker process on an engine (MuJoCo Warp, a NumPy chain, a JAX chain, or yours). The server reads and writes a state directory holding graphs, kernels and jobs, the ledger, and the agent's journal, which it only reads.](docs/flow.svg)
 
 ```
 # from clones of phost, phost-coupledchol, phost-lab, phost-author, phost-score and this repo (see the phost README; phost-agent is optional):
@@ -11,8 +13,13 @@ phost-dash
 ```
 
 It prints an address and opens it in your browser. The address carries a one-time key; the server turns it into a
-cookie and drops it from the address bar. Nothing is served without it. The dashboard needs `mujoco`, `mujoco-warp`
-and a CUDA GPU to run anything.
+cookie and drops it from the address bar. Nothing is served without it.
+
+What a scene needs depends on its engine. A MuJoCo scene needs `mujoco`, `mujoco-warp` and a CUDA GPU. The chain scenes
+(`chain32:pluck`, `chain256:ringing`) need only NumPy and run on the CPU; `jaxchain32:pluck` needs `jax`. The page opens on
+`tank:boat`, a MuJoCo scene, so on a machine without MuJoCo pick a chain scene in the scene list first. Run, live view,
+phase profile and *where a change could pay* were run through the dashboard on the NumPy chain with no MuJoCo or Warp installed.
+Pictures of a run (the rendered frames) are drawn for MuJoCo scenes only.
 
 ## What is in it
 
@@ -20,8 +27,9 @@ Five screens, in the order you use them:
 
 - **Studio**: pick a scene and an experiment and press *Run comparison*. The same scene is run twice from the same
   settled state, the reference on the left and your experiment on the right (or laid over each other), drawn as it is
-  computed. A third copy of the reference is stepped alongside as a yardstick: the GPU is not bitwise repeatable, so
-  "how far is the experiment from the reference" only means something next to "how far is the reference from itself".
+  computed. A third copy of the reference is stepped alongside as a yardstick: a GPU is not bitwise repeatable, so
+  "how far is the experiment from the reference" only means something next to "how far is the reference from itself" (an engine
+  that does repeat exactly, such as the chain, is compared with a small rounding floor instead).
   Below the view, a plain-language verdict says whether the experiment kept the reference's answer. *Time it* is a
   separate run with nothing streaming, so the timing is clean: it gives step time, speed against the reference and
   accuracy per world count, with the checks that passed, and *Record to leaderboard* keeps it. Drag to orbit, scrub or
@@ -33,7 +41,7 @@ Five screens, in the order you use them:
   example, a saved one), not whatever was in the editor.
 - **Build**: three workspaces. *Choose stages* shows each place in the physics step with the reference or an
   alternative for it, its settings, and what kind of change it is (same answer, close answer, changes the physics,
-  read-only). Two cards above them measure on a scene, in a worker on your GPU: *Where a change could pay* (how much of the step each
+  read-only). Two cards above them measure on a scene, in a worker: *Where a change could pay* (how much of the step each
   part takes, so the most a faster replacement could give, which parts apply and why not, and the shape of the
   flexible-body matrix) and *Where the time goes* (each phase of the step timed on its own, for the reference and, if you ask,
   for your experiment installed). *Type an equation* takes the law of any stage that declares a form for it and shows what it does before any simulation: a curve per output for a force, controller or body wrench, each channel's value on a sample state for a probe, and the residual after every pass for a typed solver step (conjugate gradients, Jacobi or your own lines). *Write a kernel* checks your
@@ -57,8 +65,9 @@ Five screens, in the order you use them:
   (`phost-dash[research]`) and says so when it is missing.
 - **Guide**: what the words mean and what the numbers are worth.
 
-The built-in scene is `tank:boat`: a glass tank that shuttles side to side, a boat with a cloth sail and three crates on
-its deck. **The water is 150 frictionless spheres, not a fluid.** MuJoCo has no fluid solver; the boat floats because
+The built-in scenes are eleven MuJoCo ones (trampolines of three sizes, an arm, and the tank below), two NumPy chains and one
+JAX chain; `--scene-dir` and `--plugin` add your own. The one the page opens on is `tank:boat`: a glass tank that shuttles
+side to side, a boat with a cloth sail and three crates on its deck. **The water is 150 frictionless spheres, not a fluid.** MuJoCo has no fluid solver; the boat floats because
 spheres hold it up, not because of buoyancy. It is there to be a busy scene that mixes contact, a flexible body and
 free bodies, not to be water. (It has nv=622, which is beyond the coupled-block solver's range of 512, so that
 solver refuses it and says so. The trampoline scenes are the ones to time it on.)
@@ -85,7 +94,7 @@ phost-dash --plugin my_stages --scene-dir ./my-scenes      # your own stages and
   a determined author could report anything. Every ledger entry from this dashboard is marked `self-reported`: it was
   measured here, by whoever pressed the button, and nothing has checked it independently. The ledger's hash chain
   catches accidents (a truncated or edited file); it does not stop someone who rewrites the whole file.
-- Timings are comparable only on a quiet GPU. The header shows how many other processes are using it, and a run is
+- Timings are comparable only on a quiet device. The header shows how many other processes are using the GPU, and a run is
   flagged unreliable if the two native timings disagree or the GPU was shared.
 
 ## Tests

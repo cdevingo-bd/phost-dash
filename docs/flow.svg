@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 744" width="1000" height="744" role="img" aria-labelledby="ttl dsc">
+<title id="ttl">phost-dash: a local browser over the lab, the ledger and an agent's journal</title>
+<desc id="dsc">The browser shows five screens: Studio, Build, Results, Research and Guide. It talks to a server that listens on loopback only, behind a one-time key turned into a cookie, a Host check, a same-origin JSON rule and a strict content security policy. The server is a thin layer over plain App methods and a job manager. Every run happens in a separate phost-lab worker process, one at a time, on whichever engine the scene names. The state directory holds graphs, kernels and jobs, the phost-score ledger, and, read-only, the phost-agent journal.</desc>
+<style>
+  :root { --bg:#ffffff; --ink:#1b1b1a; --ink2:#4a4945; --muted:#66645f; --line:#8c8a84; --rule:#d6d5cf;
+          --host:#efeeea; --accent:#1f5fbf; --accentfill:#e8f0fb; --onaccent:#ffffff; --warn:#8a4b00; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#161615; --ink:#ecebe7; --ink2:#c2c1ba; --muted:#8f8d86; --line:#77756f; --rule:#34332f;
+            --host:#242422; --accent:#6ea2f0; --accentfill:#1b2a40; --onaccent:#0d1726; --warn:#e0a458; }
+  }
+  text { font-family: system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: var(--ink); font-size: 12px; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace; }
+  .title { font-size: 16px; font-weight: 700; }
+  .head { font-size: 13px; font-weight: 700; }
+  .sub { fill: var(--ink2); }
+  .small { font-size: 11px; fill: var(--ink2); }
+  .tag { font-size: 10.5px; fill: var(--muted); }
+  .bold { font-weight: 700; }
+  .acc { fill: var(--accent); }
+  .mut { fill: var(--muted); }
+  .warn { fill: var(--warn); }
+  .box { fill: var(--bg); stroke: var(--line); stroke-width: 1; }
+  .hostbox { fill: var(--host); stroke: var(--line); stroke-width: 1; }
+  .corebox { fill: var(--accentfill); stroke: var(--accent); stroke-width: 1; }
+  .ownbox { fill: var(--bg); stroke: var(--accent); stroke-width: 1.4; }
+  .yours { fill: none; stroke: var(--line); stroke-width: 1; stroke-dasharray: 4 3; }
+  .frame { fill: none; stroke: var(--rule); stroke-width: 1; }
+  .rule { stroke: var(--rule); stroke-width: 1; fill: none; }
+  .ln { stroke: var(--line); stroke-width: 1; fill: none; }
+  .arrow { stroke: var(--ink2); stroke-width: 1.2; fill: none; marker-end: url(#h); }
+  .aarrow { stroke: var(--accent); stroke-width: 1.2; fill: none; marker-end: url(#ha); }
+  .back { stroke: var(--muted); stroke-width: 1; fill: none; stroke-dasharray: 3 3; marker-end: url(#h); }
+  .badge { fill: var(--accent); }
+  .badgetx { fill: var(--onaccent); font-size: 10.5px; font-weight: 700; text-anchor: middle; }
+</style>
+<defs><marker id="h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L9,5 L0,9 z" style="fill:var(--ink2)"/></marker><marker id="ha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L9,5 L0,9 z" style="fill:var(--accent)"/></marker></defs>
+<rect x="0" y="0" width="1000" height="744" style="fill:var(--bg)"/>
+<text x="24" y="28" class="title" text-anchor="start">phost-dash: a local browser over the lab, the ledger and an agent's journal</text>
+<text x="976" y="28" class="tag mono" text-anchor="end">no GPU work in the server process</text>
+<text x="24" y="62" class="head" text-anchor="start">browser</text>
+<text x="24" y="78" class="small" text-anchor="start">five screens, in the order you use them</text>
+<text x="356" y="62" class="head acc" text-anchor="start">server</text>
+<text x="356" y="78" class="small" text-anchor="start">127.0.0.1 only; a thin layer over App</text>
+<text x="704" y="62" class="head" text-anchor="start">workers</text>
+<text x="704" y="78" class="small" text-anchor="start">phost-lab, one process per job</text>
+<rect x="24" y="100.0" width="272" height="54.8" rx="3" class="box"/>
+<text x="33" y="118.0" class="head" text-anchor="start">Studio</text>
+<text x="33" y="135.0" class="small" text-anchor="start">run a graph beside native, watch it,</text>
+<text x="33" y="149.0" class="small" text-anchor="start">then time it and record it</text>
+<rect x="24" y="164.8" width="272" height="54.8" rx="3" class="box"/>
+<text x="33" y="182.8" class="head" text-anchor="start">Build</text>
+<text x="33" y="199.8" class="small" text-anchor="start">choose stages, type an equation,</text>
+<text x="33" y="213.8" class="small" text-anchor="start">write a kernel; reports on a scene</text>
+<rect x="24" y="229.6" width="272" height="54.8" rx="3" class="box"/>
+<text x="33" y="247.6" class="head" text-anchor="start">Results</text>
+<text x="33" y="264.6" class="small" text-anchor="start">the leaderboard and history;</text>
+<text x="33" y="278.6" class="small" text-anchor="start">open a row in Studio or Build</text>
+<rect x="24" y="294.4" width="272" height="54.8" rx="3" class="box"/>
+<text x="33" y="312.4" class="head" text-anchor="start">Research</text>
+<text x="33" y="329.4" class="small" text-anchor="start">what a phost-agent run did; the</text>
+<text x="33" y="343.4" class="small" text-anchor="start">arena: checks and entries</text>
+<rect x="24" y="359.2" width="272" height="54.8" rx="3" class="box"/>
+<text x="33" y="377.2" class="head" text-anchor="start">Guide</text>
+<text x="33" y="394.2" class="small" text-anchor="start">what the words mean and</text>
+<text x="33" y="408.2" class="small" text-anchor="start">what the numbers are worth</text>
+<rect x="356" y="100" width="288" height="314" rx="3" class="corebox"/>
+<rect x="366" y="110" width="268" height="98" rx="3" class="box"/>
+<text x="375" y="128" class="bold mono" text-anchor="start">guard, on every request</text>
+<text x="375" y="145" class="small" text-anchor="start">one-time key in the address, turned into</text>
+<text x="375" y="159" class="small" text-anchor="start">a cookie; Host must be loopback; changes</text>
+<text x="375" y="173" class="small" text-anchor="start">need cookie, same origin, JSON; strict CSP</text>
+<rect x="366" y="218" width="268" height="70" rx="3" class="box"/>
+<text x="375" y="236" class="bold mono" text-anchor="start">App</text>
+<text x="375" y="253" class="small" text-anchor="start">every request is a method: plain data</text>
+<text x="375" y="267" class="small" text-anchor="start">in, plain data out; testable alone</text>
+<rect x="366" y="298" width="268" height="84" rx="3" class="box"/>
+<text x="375" y="316" class="bold mono" text-anchor="start">jobs</text>
+<text x="375" y="333" class="small" text-anchor="start">one at a time, so a timing is not</text>
+<text x="375" y="347" class="small" text-anchor="start">disturbed by another job; stream events;</text>
+<text x="375" y="361" class="small" text-anchor="start">cancel or timeout kills the group</text>
+<rect x="704" y="100" width="272" height="138" rx="3" class="corebox"/>
+<text x="713" y="118" class="bold mono" text-anchor="start">worker process</text>
+<text x="713" y="135" class="small" text-anchor="start">run_isolated: a graph on a scene,</text>
+<text x="713" y="149" class="small" text-anchor="start">a report, a live view, a profile.</text>
+<text x="713" y="163" class="small" text-anchor="start">A kernel's source is compiled and run</text>
+<text x="713" y="177" class="small" text-anchor="start">only here, sandboxed. The server never</text>
+<text x="713" y="191" class="small" text-anchor="start">opens a device context.</text>
+<rect x="704" y="250" width="272" height="142" rx="3" class="hostbox"/>
+<text x="713" y="268" class="bold mono" text-anchor="start">an engine of the lab's</text>
+<text x="713" y="285" class="small" text-anchor="start">mjwarp: MuJoCo Warp, CUDA</text>
+<text x="713" y="299" class="small" text-anchor="start">chain: NumPy, CPU</text>
+<text x="713" y="313" class="small" text-anchor="start">jaxchain: JAX, XLA</text>
+<text x="713" y="327" class="small" text-anchor="start">yours: register_engine(...)</text>
+<text x="713" y="341" class="small" text-anchor="start">what a scene can show depends on it</text>
+<path d="M299,190 L352,190" class="aarrow"/>
+<path d="M352,214 L299,214" class="back"/>
+<path d="M647,190 L700,190" class="aarrow"/>
+<path d="M700,214 L647,214" class="back"/>
+<text x="302" y="184" class="tag" text-anchor="start">HTTP</text>
+<text x="302" y="228" class="tag" text-anchor="start">events</text>
+<text x="650" y="184" class="tag" text-anchor="start">job</text>
+<text x="650" y="228" class="tag" text-anchor="start">frames</text>
+<path d="M500,416 L500,468" class="aarrow"/>
+<text x="508" y="446" class="tag" text-anchor="start">reads and writes (the journal: reads only)</text>
+<rect x="24" y="470" width="952" height="124" rx="4" class="frame"/>
+<text x="34" y="464" class="tag" text-anchor="start">state directory ($PHOST_HOME, or --state): shared with the command-line tools</text>
+<rect x="40" y="484" width="290" height="84" rx="3" class="box"/>
+<text x="49" y="502" class="bold mono" text-anchor="start">graphs, kernels, jobs</text>
+<text x="49" y="519" class="small" text-anchor="start">an experiment is plain JSON;</text>
+<text x="49" y="533" class="small" text-anchor="start">a saved kernel is a file;</text>
+<text x="49" y="547" class="small" text-anchor="start">a job's stream can be replayed</text>
+<text x="49" y="581" class="tag mono" text-anchor="start">Studio, Build</text>
+<rect x="356" y="484" width="290" height="84" rx="3" class="box"/>
+<text x="365" y="502" class="bold mono" text-anchor="start">ledger</text>
+<text x="365" y="519" class="small" text-anchor="start">phost-score's hash-chained record;</text>
+<text x="365" y="533" class="small" text-anchor="start">rows from here are self-reported:</text>
+<text x="365" y="547" class="small" text-anchor="start">measured here, by whoever pressed</text>
+<text x="365" y="581" class="tag mono" text-anchor="start">Results</text>
+<rect x="672" y="484" width="290" height="84" rx="3" class="box"/>
+<text x="681" y="502" class="bold mono" text-anchor="start">journal</text>
+<text x="681" y="519" class="small" text-anchor="start">what a phost-agent run did: funnel,</text>
+<text x="681" y="533" class="small" text-anchor="start">memo, spend, arena checks, entries;</text>
+<text x="681" y="547" class="small" text-anchor="start">start a search with phost-agent</text>
+<text x="681" y="581" class="tag mono" text-anchor="start">Research (read only)</text>
+<path d="M24,622 L976,622" class="rule"/>
+<text x="24" y="650" class="head" text-anchor="start">What runs where</text>
+<text x="24" y="672" class="small" text-anchor="start">The dashboard runs on a scene of any engine the lab has. A MuJoCo scene needs mujoco, mujoco-warp and a CUDA GPU. The chain scenes need neither:</text>
+<text x="24" y="686" class="small" text-anchor="start">run, live, profile and analysis jobs were run on the NumPy chain on the CPU, with no MuJoCo or Warp installed. The JAX chain needs jax.</text>
+<text x="24" y="700" class="small" text-anchor="start">Pictures of a run are drawn for MuJoCo scenes only. A tool an engine does not declare (live, profile) is refused, naming the engines that do.</text>
+<text x="24" y="722" class="small" text-anchor="start">Timings are comparable only on a quiet device: the header shows who else is using the GPU, and a run is flagged unreliable if the two native timings disagree.</text>
+</svg>
