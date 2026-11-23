@@ -53,6 +53,7 @@ ROUTES = [
     ("GET", r"/api/board", lambda a, m, q, b: a.board(q)),
     ("GET", r"/api/wins", lambda a, m, q, b: a.wins(q)),
     ("GET", r"/api/wins/([0-9a-f]{6,64})/graph", lambda a, m, q, b: a.win_graph(m[1])),
+    ("GET", r"/api/open/(entry|check)/([0-9a-f]{6,64})", lambda a, m, q, b: a.open_graph(m[1], m[2])),
     ("GET", r"/api/ledger", lambda a, m, q, b: a.ledger_status()),
 ]
 ROUTES = [(method, re.compile(pattern + r"\Z"), handler) for method, pattern, handler in ROUTES]

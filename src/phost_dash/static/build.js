@@ -14,6 +14,10 @@ import { profileCard } from "./profile.js";
 
 const CONSTANTS = ["a", "b", "c", "d", "e", "f", "g", "h"];
 
+let controller = null;
+// show what was opened here: the kernels it names, the first one's source in the editor (none: just the stages), and where it came from
+export const openInBuild = (kernels, origin) => controller && controller.open(kernels, origin);
+
 export function mountBuild(root, go) {
   const panes = {
     stages: h("div", { class: "pane", "data-pane": "stages" }),
@@ -31,15 +35,19 @@ export function mountBuild(root, go) {
     panes.stages, panes.equation, panes.kernel));
 
   mountStages(panes.stages, go, show);
+  let kernel = null;
   if (state.info && state.info.author) {
     mountEquation(panes.equation, go);
-    mountKernel(panes.kernel, go);
+    kernel = mountKernel(panes.kernel, go);
   } else {
     for (const el of [panes.equation, panes.kernel]) {
       el.append(empty({ iconName: "info", title: "This needs the phost-author package",
         text: "Typed equations and kernels come from phost-author. Install it into the same environment, then restart the dashboard." }));
     }
   }
+  controller = { open(kernels, origin) {
+    if (kernel && kernels.length) { show("kernel"); kernel.open(kernels[0], origin); } else show("stages");
+  } };
   return { activate() {}, show };
 }
 
@@ -471,8 +479,19 @@ function mountKernel(root, go) {
     } catch (error) { clear(savedBox, h("div", { class: "alert bad" }, error.message)); }
   }
 
+  const origin = h("div", { class: "alert info", hidden: true, "data-test": "kernel-origin" });
+  async function open(k, from) {                                     // a kernel saved for you by opening something an agent made
+    try {
+      const full = await get(`/api/kernels/${encodeURIComponent(k.name)}`);
+      source.value = full.source; stageSel.value = full.stage; nameIn.value = k.name;
+      clear(origin, icon("info", 16), h("span", {}, from ? `From “${from.label || from.id}” on ${from.scene}. ` : "",
+        `Its source is saved as the kernel “${k.name}”, which your experiment uses; the rest of the graph is under Choose stages. `),
+        button("Test in Studio", { iconName: "play", test: "kernel-test", onclick: () => go.prefillStudio(from || { scene: state.scene, label: k.name, kind: "entry", klass: "" }) }));
+      origin.hidden = false;
+    } catch (error) { clear(origin, error.message); origin.hidden = false; }
+  }
   root.append(h("div", { class: "split-even" },
-    h("section", { class: "card stack" }, h("header", { class: "card-head" }, h("h2", {}, "Your kernel")),
+    h("section", { class: "card stack" }, h("header", { class: "card-head" }, h("h2", {}, "Your kernel")), origin,
       h("p", { class: "hint" }, "Your source is compiled and run only inside a sandboxed worker, never in the dashboard's own process."),
       h("div", { class: "row" }, field("Name", nameIn), field("Stage", stageSel), h("span", { class: "grow" }), button("Load the template", { onclick: loadTemplate, test: "kernel-template" })),
       source, h("div", { class: "row" }, check, save)),
@@ -481,4 +500,5 @@ function mountKernel(root, go) {
   const placeholder = out.nextElementSibling;
   new MutationObserver(() => { if (placeholder) placeholder.hidden = out.childNodes.length > 0; }).observe(out, { childList: true });
   listSaved();
+  return { open };
 }

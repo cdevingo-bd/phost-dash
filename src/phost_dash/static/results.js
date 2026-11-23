@@ -7,6 +7,7 @@ import { icon } from "./icons.js";
 import { pill, segmented, empty, field, button } from "./ui.js";
 import { scenes, classInfo } from "./state.js";
 import { Scatter } from "./charts.js";
+import { openButtons } from "./agent.js";
 
 const TRUST = {
   "self-reported": ["Self-reported", "", "Measured on this machine by whoever ran it. Nothing has checked it independently."],
@@ -124,7 +125,7 @@ function mountBoard(root, go) {
       h("td", { title: `graph ${r.graph_hash}` }, h("span", {}, r.label || `#${r.seq}`), r.notes.length ? h("div", { class: "hint" }, r.notes.join("; ")) : null),
       h("td", {}, pill(t[0], t[1], null, t[2]), r.reliable ? null : pill("Timing unreliable", "warn", "alert")),
       g.objectives.map((o) => h("td", { class: "num" }, num(r.objectives[o.name]))),
-      h("td", { class: "hint" }, when(r.time)), h("td", {}, btn, result));
+      h("td", { class: "hint" }, when(r.time)), h("td", { class: "actions" }, h("div", { class: "row center" }, openButtons(go, "entry", r.id), btn), result));
   }
 
   fillScenes();

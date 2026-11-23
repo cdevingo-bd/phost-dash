@@ -15,6 +15,7 @@ const EVERY = 6;
 let controller = null;
 export const openJob = (id) => controller && controller.open(id);
 export const showRun = (id) => controller && controller.showRun(id);
+export const prefillStudio = (out) => controller && controller.prefill(out);
 
 export function mountStudio(root, go) {
   const camera = new Camera();
@@ -31,6 +32,7 @@ export function mountStudio(root, go) {
   const runBtn = button("Run comparison", { kind: "primary", iconName: "play", test: "run", onclick: () => start() });
   const stopBtn = button("Stop", { iconName: "stop", test: "stop", onclick: () => cancel(), disabled: true });
   const message = h("div", { class: "alert bad", hidden: true, "data-test": "error" });
+  const loaded = h("div", { class: "alert info", hidden: true, "data-test": "loaded" });      // what was opened here from elsewhere
 
   const bar1 = h("div", { class: "commandbar" },
     h("div", { class: "cmd-group" }, field("Scene", sceneSel), sceneNote),
@@ -111,7 +113,7 @@ export function mountStudio(root, go) {
       button("Make my own in Build", { iconName: "layers", onclick: () => go.show("build") })));
   coach.hidden = localStorage.getItem("phost-coach") === "off";
 
-  root.append(h("div", { class: "studio" }, coach, bar1, message, viewer, h("div", { class: "split2" }, verdictCard, timingCard)));
+  root.append(h("div", { class: "studio" }, coach, bar1, loaded, message, viewer, h("div", { class: "split2" }, verdictCard, timingCard)));
   renderVerdict(null);
 
   // ---- options ----
@@ -192,7 +194,8 @@ export function mountStudio(root, go) {
         : h("span", { class: "hint" }, "Changes nothing: a second copy of the reference."),
         win ? h("span", { class: "hint", title: "Measured on this machine by whoever ran it; nothing has checked it independently." },
           ` recorded by ${win.label || "someone"}, self-reported: ${Object.entries(win.speedups).map(([k, v]) => `${num(v, 3)}× at ${k} world${k === "1" ? "" : "s"}`).join(", ")}.`) : null,
-        h("button", { class: "link", type: "button", onclick: () => go.show("build") }, "Edit in Build"));
+        h("button", { class: "link", type: "button", "data-test": "edit-in-build",
+          onclick: () => (value === "editor" ? go.show("build") : go.toBuild(graph, win)) }, "Edit in Build"));
       return graph;
     } catch (error) {
       clear(expNote, h("span", { class: "hint bad" }, error.message));
@@ -241,6 +244,7 @@ export function mountStudio(root, go) {
 
   async function start() {
     reset();
+    loaded.hidden = true;
     runBtn.disabled = true;
     setPhase("busy", "Starting the worker…");
     try {
@@ -530,6 +534,26 @@ export function mountStudio(root, go) {
   }
   const GATE_NAMES = { finite: "Stayed finite", accuracy: "Accuracy", stage: "Stage limits" };
 
-  controller = { open, showRun: showRunById };
+  // ---- opened from elsewhere: something an agent made, with everything around it filled in ----
+  // `out` is what /api/open/... returns, and the graph is already the one Build edits ("Your experiment"). Nothing runs.
+  function prefill(out) {
+    reset();
+    runBtn.disabled = false; stopBtn.disabled = true;
+    if (out.scene && scenes().some((sc) => sc.id === out.scene)) { state.scene = sceneSel.value = out.scene; fillScenes(); }
+    if (out.worlds && out.worlds.length) { worldsIn.value = out.worlds.join(", "); timedTouched = true; }
+    if (out.steps) timedSteps.value = out.steps;
+    fillExperiments();
+    expSel.value = "editor";
+    refreshExpectation();
+    coach.hidden = true;
+    const speeds = Object.entries(out.speedups || {}).filter(([, v]) => v !== null && v !== undefined)
+      .map(([k, v]) => `${num(v, 3)}× at ${k} world${k === "1" ? "" : "s"}`).join(", ");
+    clear(loaded, icon("info", 16), h("span", {}, `Opened “${out.label || out.id}” on ${out.scene}`,
+      out.kind === "check" ? (out.passed ? ", a check it passed that was never timed" : ", a check that did not pass") : speeds ? `, recorded at ${speeds} (${classInfo(out.klass || "").label.toLowerCase()})` : "",
+      ". Press Run comparison to watch it, or Time it to measure it. It is in the experiment list as “Your experiment”."));
+    loaded.hidden = false;
+  }
+
+  controller = { open, showRun: showRunById, prefill };
   return { activate() { loadWins(); for (const v of Object.values(views)) v.draw(); } };
 }

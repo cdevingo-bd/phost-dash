@@ -101,7 +101,7 @@ def test_an_arena_contest_is_on_the_tab_with_who_is_in_it_what_they_checked_and_
     assert out["status"] == "running" and out["scene"] == SCENE and [c["name"] for c in out["contestants"]] == ["opus", "sonnet"]
     assert out["contestants"][0]["checks"] == 1 and out["contestants"][1]["best_speedup"] == 0.247
     assert out["checks"][0]["id"] == "a1b2c3d4" and "PROBE" in out["checks"][0]["outcome"] and "source, 2 lines" in out["checks"][0]["what"]
-    assert out["entries"][0]["note"] == "a dense solve"
+    assert out["entries"][0]["note"] == "a dense solve" and out["entries"][0]["entry_ids"] == ["e1"]       # so the page can open it
     status, over_http = client.get("/api/research")
     assert status == 200 and over_http["arena"]["status"] == "running"
     json.dumps(out)

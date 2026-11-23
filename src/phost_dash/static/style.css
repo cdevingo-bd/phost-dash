@@ -347,3 +347,7 @@ input.code { width: 100%; }
 td.reason { max-width: 46ch; overflow-wrap: anywhere; }
 td.mono { font-family: var(--mono, ui-monospace, monospace); font-size: 12px; overflow-wrap: anywhere; max-width: 36ch; }
 .funnel td.hint, .funnel td.num { white-space: nowrap; }
+
+.actions { white-space: nowrap; }
+.open-buttons { display: inline-flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.open-buttons .btn { padding: 4px 9px; font-size: 12px; }

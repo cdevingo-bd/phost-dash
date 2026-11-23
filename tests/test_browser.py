@@ -402,3 +402,87 @@ def test_a_recorded_win_is_offered_in_studio_and_runs_like_your_own_experiment(p
     choose(page, "[data-test=scene]", "chain32:pluck")                              # a win is only offered as one on its own scene
     assert page.wait("document.querySelector('[data-test=experiment]').value === 'native'", 5)
     assert page.problems == []
+
+
+def record_graph(dash, stages, *, label, speedup):
+    """Put an entry on the leaderboard from outside the page (as a contest or `phost-score submit` does), on trampoline8:impact."""
+    from phost_score import SELF_REPORTED, make_entries
+    from conftest import NATIVE_GRAPH, finished
+    result = json.loads(json.dumps(finished(dash.app, dash.app.start_run(dict(graph=NATIVE_GRAPH, scene="trampoline8:impact",
+                                                                                worlds=[1, 8], steps=10))["id"])["result"]))
+    result["graph"]["stages"], result["stage_classes"] = stages, {stage: "exact" for stage in stages}
+    for cell in result["cells"]:
+        cell["speedup"] = speedup
+    for entry in make_entries(result, label=label, trust=SELF_REPORTED):
+        dash.app.ledger.append(entry.to_dict())
+
+
+def test_a_leaderboard_row_opens_in_studio_prefilled_and_in_build_with_its_source(page, dash, config):
+    """An agent's entry that did not even beat the reference is on the leaderboard too. Its row has a button that opens it in Studio with
+    the scene, the world counts and the experiment filled in (nothing runs), and one that opens it in Build with the graph in the
+    editor and its source in the kernel pane."""
+    pytest.importorskip("phost_agent")
+    from phost_agent import Journal
+    source = "class Runtime:\n    def __init__(self, host, params):\n        pass\n    def solve(self, system):\n        pass\n    def metrics(self):\n        return {}\n"
+    node = dict(source=source, entry="Runtime", impl="effective.solve/agent-abc123")
+    Journal(config.state / "agent" / "journal.jsonl").append("submission", contestant="sonnet", graph=dict(stages={"effective.solve": node}))
+    record_graph(dash, {"effective.solve": dict(impl="effective.solve/agent-abc123", params={})}, label="sonnet", speedup=0.4)
+    tab(page, "results")
+    assert page.wait("document.querySelectorAll('[data-test=board-row]').length >= 1", 12)
+    assert page.eval("document.querySelector('[data-test=board-row] [data-test=open-entry-studio]') !== null")
+    click(page, "[data-test=board-row] [data-test=open-entry-studio]")
+    assert page.wait("!document.querySelector('#tab-studio').hidden && !document.querySelector('[data-test=loaded]').hidden", 10), page.problems
+    assert "sonnet" in page.eval("document.querySelector('[data-test=loaded]').textContent")
+    assert "0.4" in page.eval("document.querySelector('[data-test=loaded]').textContent")
+    assert page.eval("document.querySelector('[data-test=scene]').value") == "trampoline8:impact"
+    assert page.eval("document.querySelector('[data-test=worlds]').value") == "1, 8"
+    assert page.eval("document.querySelector('[data-test=experiment]').value") == "editor"
+    assert page.wait("document.querySelector('.exp-note')?.textContent.includes('Same answer')", 10)
+    assert not page.eval("document.querySelector('[data-test=run]').disabled") and page.eval("document.querySelector('[data-test=welcome]') !== null")
+    tab(page, "results")                                                              # and from the same row into Build
+    click(page, "[data-test=board-row] [data-test=open-entry-build]")
+    assert page.wait("!document.querySelector('#tab-build').hidden && !document.querySelector('[data-pane=kernel]').hidden", 10), page.problems
+    assert page.wait("document.querySelector('[data-test=kernel-source]').value.includes('class Runtime')", 10)
+    assert page.eval("document.querySelector('[data-test=kernel-name]').value").startswith("entry-")
+    assert "sonnet" in page.eval("document.querySelector('[data-test=kernel-origin]').textContent")
+    click(page, "[data-value=stages]")                                                # the graph around it is in the editor
+    assert page.eval("document.querySelector('[data-test=impl-effective\\\\.solve]').value").startswith("effective.solve/user-entry-")
+    assert page.problems == []
+
+
+def test_a_check_and_an_arena_entry_open_from_the_research_tab_and_a_failure_says_why(page, dash, config):
+    pytest.importorskip("phost_agent")
+    from phost_agent import Journal
+    journal = Journal(config.state / "agent" / "journal.jsonl")
+    journal.append("arena", phase="start", contest="c1", task=dict(scene="trampoline8:impact", worlds=[1, 8]), budget=dict(turns=9, submits=3, open=True),
+                   contestants=[dict(name="haiku", model="claude-code:haiku")])
+    node = dict(source="class Runtime:\n    pass\n", entry="Runtime", impl="effective.solve/agent-feed01")
+    journal.append("arena", phase="attempt", id="a1b2c3d4", contest="c1", contestant="haiku", turn=1, scene="trampoline8:impact", action="check",
+                   ok=True, digest="d", graph=dict(stages={"effective.solve": node}), reasons=[])
+    journal.append("submission", contestant="haiku", contest="c1", graph=dict(stages={"effective.solve": node}), entry_ids=["0" * 16], note="n",
+                   speedup=0.1, klass="exact")                                         # entered, but nothing on the board under that id
+    tab(page, "research")
+    assert page.wait("document.querySelector('[data-test=arena-checks] [data-test=open-check-studio]') !== null", 10)
+    click(page, "[data-test=arena-checks] [data-test=open-check-studio]")
+    assert page.wait("!document.querySelector('#tab-studio').hidden && !document.querySelector('[data-test=loaded]').hidden", 10), page.problems
+    assert "check it passed that was never timed" in page.eval("document.querySelector('[data-test=loaded]').textContent")
+    assert page.eval("document.querySelector('[data-test=worlds]').value") == "1, 8"
+    tab(page, "research")
+    click(page, "[data-test=arena-entries] [data-test=open-entry-build]")             # no such entry in the ledger: it says so, nothing breaks
+    assert page.wait("document.querySelector('[data-test=open-entry-status]') && !document.querySelector('[data-test=open-entry-status]').hidden", 10)
+    assert "no entry" in page.eval("document.querySelector('[data-test=open-entry-status]').textContent")
+    assert not page.eval("document.querySelector('[data-test=open-entry-build]').disabled")
+    assert page.problems and all("/api/open/entry/" + "0" * 16 in problem for problem in page.problems)       # only the 404 asked for
+
+
+def test_edit_in_build_opens_the_experiment_that_is_selected_not_whatever_was_there(page, dash):
+    """The link under the experiment list used to switch tabs and leave Build showing the experiment you had been editing."""
+    record_graph(dash, {"effective.solve": dict(impl="effective.solve/native", params={})}, label="opus", speedup=2.0)
+    assert page.wait("[...document.querySelectorAll('[data-test=experiment] option')].some(o => o.value.startsWith('win:'))", 12)
+    value = page.eval("[...document.querySelectorAll('[data-test=experiment] option')].find(o => o.value.startsWith('win:')).value")
+    choose(page, "[data-test=experiment]", value)
+    assert page.wait("document.querySelector('.exp-note')?.textContent.includes('recorded by opus')", 10)
+    assert page.eval("document.querySelector('[data-test=graph-name]').value") == "my-experiment"
+    click(page, "[data-test=edit-in-build]")
+    assert page.wait("!document.querySelector('#tab-build').hidden && document.querySelector('[data-test=graph-name]').value === 'win: opus'", 10), page.problems
+    assert page.problems == []

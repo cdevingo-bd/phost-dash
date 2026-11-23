@@ -562,3 +562,68 @@ def test_wins_are_served_over_http_to_a_logged_in_browser(client, app):
     assert status == 200 and out == dict(wins=[])
     assert client.get("/api/wins/ffffffff/graph")[0] == 404
     assert client.json("POST", "/api/wins")[0] == 405
+
+
+# ---- opening what is on the leaderboard or was checked: Studio and Build, not only wins ----
+
+def board_ids(app):
+    return [row["id"] for group in app.board({})["groups"] for row in group["rows"]]
+
+
+def write_journal(config, *entries):
+    journal = config.state / "agent" / "journal.jsonl"
+    journal.parent.mkdir(parents=True, exist_ok=True)
+    journal.write_text("".join(json.dumps(dict(seq=i, entry=e)) + "\n" for i, e in enumerate(entries, 1)))
+
+
+def test_any_entry_on_the_leaderboard_opens_as_a_graph_with_its_scene_and_world_counts_even_when_it_lost(app):
+    record_entries(app, NATIVE_SOLVE, label="loser", speedup=0.6)
+    assert app.wins({})["wins"] == []                                               # not a win: opening it still works
+    out = app.open_graph("entry", board_ids(app)[0])
+    assert out["scene"] == "trampoline8:impact" and out["worlds"] == [1, 8] and out["label"] == "loser" and out["kind"] == "entry"
+    assert out["speedups"] == {1: 0.6, 8: 0.6} and out["kernels"] == [] and out["klass"] == "exact"
+    assert out["graph"]["stages"] == NATIVE_SOLVE and app.validate({"graph": out["graph"]})["ok"] is True
+    json.dumps(out)
+    assert error_of(app.open_graph, "entry", "0" * 16).status == 404 and error_of(app.open_graph, "nope", "0" * 16).status == 404
+
+
+def test_an_agent_entry_opens_with_its_source_saved_as_a_kernel_that_build_can_show(app, config):
+    stages = {"effective.solve": dict(impl="effective.solve/agent-abc123", params={})}
+    record_entries(app, stages, label="sonnet", speedup=0.3)
+    ident = board_ids(app)[0]
+    assert error_of(app.open_graph, "entry", ident).status == 409                    # no journal: say why, do not guess
+    # the source may be in an attempt only (the check that came before the timed run), and it still resolves
+    write_journal(config, dict(kind="arena", phase="attempt", id="a1b2c3d4", contestant="sonnet", scene="trampoline8:impact",
+                               graph=dict(stages={"effective.solve": dict(source=SOURCE_STUB, entry="Runtime", impl="effective.solve/agent-abc123")})))
+    out = app.open_graph("entry", ident)
+    (kernel,) = out["kernels"]
+    assert kernel["stage"] == "effective.solve" and kernel["name"].startswith("entry-") and kernel["impl"] == f"effective.solve/user-{kernel['name']}"
+    assert out["graph"]["stages"]["effective.solve"] == dict(impl=kernel["impl"], params={})
+    assert app.store.load_kernel(kernel["name"])["source"] == SOURCE_STUB
+    assert app.validate({"graph": out["graph"]})["ok"] is True
+
+
+def test_an_arena_check_opens_even_if_it_was_never_timed_and_names_the_worlds_of_its_contest(app, config):
+    nodes = {"effective.solve": dict(source=SOURCE_STUB, entry="Runtime", impl="effective.solve/agent-feed01", base="old", edit="+1/-1"),
+             "control.law": dict(impl="control.law/pd", params=dict(kp=2.0))}
+    write_journal(config,
+                  dict(kind="arena", phase="start", contest="c1", task=dict(scene="trampoline8:impact", worlds=[1, 4])),
+                  dict(kind="arena", phase="attempt", id="a1b2c3d4", contest="c1", contestant="haiku", scene="trampoline8:impact", ok=True,
+                       graph=dict(stages=nodes)))
+    out = app.open_graph("check", "a1b2c3d4")
+    assert out["kind"] == "check" and out["scene"] == "trampoline8:impact" and out["worlds"] == [1, 4] and out["passed"] is True
+    assert out["label"] == "haiku · check a1b2c3d4" and "host" not in out["graph"]            # it runs on whichever engine the scene has
+    assert [k["stage"] for k in out["kernels"]] == ["effective.solve"] and out["kernels"][0]["name"] == "check-a1b2c3d4"
+    assert out["graph"]["stages"]["control.law"] == dict(impl="control.law/pd", params=dict(kp=2.0))     # an installed one is left alone
+    assert app.store.load_kernel("check-a1b2c3d4")["source"] == SOURCE_STUB
+    assert error_of(app.open_graph, "check", "deadbeef").status == 404
+
+
+def test_what_is_opened_is_served_over_http(client, app):
+    assert client.get("/api/open/entry/ffffffffffffffff")[0] == 404
+    assert client.get("/api/open/check/ffffffff")[0] == 404
+    assert client.get("/api/open/other/ffffffff")[0] == 404
+    assert client.json("POST", "/api/open/entry/ffffffffffffffff")[0] == 405
+    record_entries(app, NATIVE_SOLVE, label="opus", speedup=1.8)
+    status, out = client.get(f"/api/open/entry/{board_ids(app)[0]}")
+    assert status == 200 and out["scene"] == "trampoline8:impact" and out["graph"]["stages"] == NATIVE_SOLVE

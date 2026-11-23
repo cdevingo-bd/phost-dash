@@ -436,38 +436,97 @@ class App:
             raise ApiError(404, "that is not a win in this ledger (a later run of it may have lost)")
         graph = copy.deepcopy(win["graph"])
         graph["name"] = f"win: {win['label'] or win['graph_hash'][:8]}"
+        return self._runnable(graph, key=graph_hash[:12], prefix="win")[0]
+
+    def open_graph(self, kind: str, ident: str) -> dict:
+        """Anything an agent or a person put on the board, or an agent checked, as a graph ready for Studio and Build, with what to
+        prefill around it (the scene, the world counts it was timed at, the steps). ``kind`` is ``entry`` (a leaderboard row's id) or
+        ``check`` (an arena attempt's id): the leaderboard is not only wins, and a check that was never timed can be tried too.
+        An implementation made for a contest is saved as a kernel of yours, named in ``kernels``, so Build can show its source."""
+        if kind == "entry":
+            return self._open_entry(ident)
+        if kind == "check":
+            return self._open_check(ident)
+        raise ApiError(404, f"nothing to open of kind {kind!r}")
+
+    def _open_entry(self, ident: str) -> dict:
+        records = self.ledger.records(strict=False)
+        found = next(((r, e) for r, e in ((r, Entry.from_dict(r.entry)) for r in records) if e.id == ident), None)
+        if found is None:
+            raise ApiError(404, f"no entry {ident} in this ledger")
+        _, entry = found
+        timed: dict[int, Entry] = {}                       # the latest run of this same graph under this label, per world count
+        for record in records:
+            other = Entry.from_dict(record.entry)
+            if (other.scene, other.device, other.graph_hash, other.label, other.trust) == (
+                    entry.scene, entry.device, entry.graph_hash, entry.label, entry.trust):
+                timed[other.worlds] = other
+        graph = copy.deepcopy(dict(entry.graph))
+        graph["name"] = f"{entry.label or 'entry'}: {entry.graph_hash[:8]}"
+        graph, kernels = self._runnable(graph, key=entry.graph_hash[:12], prefix="entry")
+        steps = entry.config.get("steps") if isinstance(entry.config, Mapping) else None
+        return dict(kind="entry", id=ident, graph=graph, kernels=kernels, scene=entry.scene, label=entry.label, klass=entry.klass,
+                    worlds=sorted(timed), steps=steps if isinstance(steps, int) and not isinstance(steps, bool) else None,
+                    speedups={w: e.objectives.get("speedup") for w, e in sorted(timed.items())}, trust=entry.trust)
+
+    def _open_check(self, ident: str) -> dict:
+        records = [e for e in self._journal_entries() if e.get("kind") == "arena"]
+        attempt = next((e for e in records if e.get("phase") == "attempt" and e.get("id") == ident), None)
+        if attempt is None:
+            raise ApiError(404, f"no check {ident} in this state's agent journal")
+        start = next((e for e in records if e.get("phase") == "start" and e.get("contest") == attempt.get("contest")), None)
+        worlds = ((start or {}).get("task") or {}).get("worlds")
+        graph = dict(version=1, name=f"check: {attempt.get('contestant', '?')} {ident}", plugins=[], note="",
+                     stages=copy.deepcopy((attempt.get("graph") or {}).get("stages") or {}))
+        graph, kernels = self._runnable(graph, key=ident, prefix="check")
+        return dict(kind="check", id=ident, graph=graph, kernels=kernels, scene=attempt.get("scene"),
+                    label=f"{attempt.get('contestant', '?')} · check {ident}", klass="", passed=bool(attempt.get("ok")),
+                    worlds=list(worlds) if isinstance(worlds, list) else [], steps=None, speedups={}, trust="")
+
+    def _runnable(self, graph: dict, *, key: str, prefix: str) -> tuple[dict, list[dict]]:
+        """The graph with each implementation this dashboard cannot import replaced by a kernel of yours holding its source (found in
+        the node itself, or in the agent journal by the implementation's id); the kernels made are listed. A node that names an
+        implementation which is installed is left as it is, without any extra keys."""
         registry = self.registry()
+        known = {stage: {i.id for i in registry.impls_for(stage)} for stage in (graph.get("stages") or {})}
         sources = self._submitted_sources()
-        substituted = 0
+        kernels: list[dict] = []
         for stage, node in (graph.get("stages") or {}).items():
             impl = node.get("impl")
-            if impl in {i.id for i in registry.impls_for(stage)}:
+            if impl in known[stage] and not node.get("source"):
+                graph["stages"][stage] = dict(impl=impl, params=dict(node.get("params") or {}))
                 continue
-            found = sources.get(impl)
+            found = dict(source=node["source"], entry=node.get("entry") or "Runtime") if node.get("source") else sources.get(impl)
             if found is None:
                 raise ApiError(409, f"{stage} uses {impl!r}, which is not installed here, and its source is not in this state's agent "
                                     "journal: run it where it was made, or start the dashboard with the plugin that provides it")
-            name = f"win-{graph_hash[:12]}" + (f"-{substituted}" if substituted else "")
+            name = f"{prefix}-{key}" + (f"-{len(kernels)}" if kernels else "")
             self._stored(self.store.save_kernel, name, stage=stage, source=found["source"], entry=found["entry"])
             graph["stages"][stage] = dict(impl=userkernels.impl_id(stage, name), params={})
-            substituted += 1
-        if substituted:                                    # the contest's own candidate modules are not importable here
+            kernels.append(dict(stage=stage, name=name, impl=graph["stages"][stage]["impl"]))
+        if kernels:                                        # the contest's own candidate modules are not importable here
             graph["plugins"] = [m for m in graph.get("plugins", []) if m in self.plugins]
-        return graph
+        return graph, kernels
 
-    def _submitted_sources(self) -> dict[str, dict[str, str]]:
-        """Source an agent contest submitted, by the implementation id its graph named: read from the agent journal."""
-        found: dict[str, dict[str, str]] = {}
+    def _journal_entries(self):
+        """The records of this state's agent journal, as the entries they wrap; lines that are not records are skipped."""
         try:
             lines = (self.config.state / "agent" / "journal.jsonl").read_text(encoding="utf-8").splitlines()
         except FileNotFoundError:
-            return found
+            return
         for line in lines:
             try:
                 entry = json.loads(line)["entry"]
             except (ValueError, KeyError, TypeError):
                 continue
-            if entry.get("kind") != "submission":
+            if isinstance(entry, dict):
+                yield entry
+
+    def _submitted_sources(self) -> dict[str, dict[str, str]]:
+        """Source an agent contest submitted or checked, by the implementation id its graph named: read from the agent journal."""
+        found: dict[str, dict[str, str]] = {}
+        for entry in self._journal_entries():
+            if not (entry.get("kind") == "submission" or (entry.get("kind") == "arena" and entry.get("phase") == "attempt")):
                 continue
             for node in (entry.get("graph", {}).get("stages") or {}).values():
                 if node.get("source") and node.get("impl"):

@@ -4,6 +4,7 @@
 import { get } from "./api.js";
 import { h, clear, num, when } from "./dom.js";
 import { pill, tile, empty } from "./ui.js";
+import { openButtons } from "./agent.js";
 
 const VERDICT = {
   accepted: ["Win", "good", "check", "Passed its checks and beat the host's own version, on a timing that can be trusted."],
@@ -20,7 +21,7 @@ const STAGES = [
   ["accepted", "A win", "Faster than the host's own version at every world count, with a timing that can be trusted."],
 ];
 
-export function mountResearch(root) {
+export function mountResearch(root, go) {
   const body = h("div", { class: "stack", "data-test": "research" });
   root.append(h("div", { class: "research" },
     h("div", { class: "page-head" }, h("div", {}, h("h1", {}, "Research"),
@@ -33,7 +34,7 @@ export function mountResearch(root) {
       const key = JSON.stringify(out);
       if (key === seen) return;                         // nothing new: leave the page as it is
       seen = key;
-      clear(body, out.installed ? view(out) : missing());
+      clear(body, out.installed ? view(out, go) : missing());
     } catch (error) { seen = ""; clear(body, h("div", { class: "alert bad" }, error.message)); }
   };
   setInterval(() => { if (!root.hidden) refresh(); }, 5000);
@@ -46,7 +47,7 @@ function missing() {
       "Install it with pip install phost-dash[research]." });
 }
 
-function view(o) {
+function view(o, go) {
   const searched = o.attempts || o.ceilings || o.task_list.length;
   if (!searched && !o.arena) {
     return [lease(o), empty({ iconName: "target", title: "No searches yet",
@@ -56,7 +57,7 @@ function view(o) {
     h("div", { class: "row center" }, o.intact ? pill("Journal intact", "good", "shield", "The journal's hash chain is intact. It catches accidents, not a determined edit.")
       : pill("Journal problems", "bad", "alert", o.problems.join("\n")), h("span", { class: "hint" }, o.journal), h("span", { class: "grow" }), lease(o)),
     o.intact ? null : h("div", { class: "alert bad" }, `The journal does not verify: ${o.problems[0]}. What is shown is what could be read.`),
-    o.arena ? arena(o.arena) : null,
+    o.arena ? arena(o.arena, go) : null,
     searched ? tiles(o) : null,
     searched ? h("section", { class: "card" }, h("header", { class: "card-head" }, h("h2", {}, "Where proposals stopped"),
       h("span", { class: "hint" }, "Each row is how many candidates got this far. The earlier a bad one stops, the less the device was used.")), funnel(o)) : null,
@@ -68,7 +69,7 @@ function view(o) {
 
 // ---- the arena: models competing on a scene's leaderboard ----
 
-function arena(a) {
+function arena(a, go) {
   const quiet = a.last_activity ? Math.round((Date.now() - Date.parse(a.last_activity)) / 60000) : 0;
   const stalled = a.status === "running" && quiet >= 10;
   const status = a.status === "finished" ? pill("Finished", "good", "check", "Every contestant has used its budget or left.")
@@ -86,9 +87,9 @@ function arena(a) {
         + (a.earlier_contests ? ` ${a.earlier_contests} earlier contest${a.earlier_contests === 1 ? "" : "s"} in this journal ${a.earlier_contests === 1 ? "is" : "are"} not shown.` : "")),
       contestants(a.contestants)),
     h("section", { class: "card" }, h("header", { class: "card-head" }, h("h2", {}, "Checks posted"),
-      h("span", { class: "hint" }, `the latest ${a.checks.length}, newest first: what each contestant tried before spending a timed run`)), checks(a.checks)),
+      h("span", { class: "hint" }, `the latest ${a.checks.length}, newest first: what each contestant tried before spending a timed run`)), checks(a.checks, go)),
     h("section", { class: "card" }, h("header", { class: "card-head" }, h("h2", {}, "Entries"),
-      h("span", { class: "hint" }, `${a.entries.length} shown, newest first`)), entries(a.entries)));
+      h("span", { class: "hint" }, `${a.entries.length} shown, newest first`)), entries(a.entries, go)));
 }
 
 function contestants(rows) {
@@ -106,30 +107,32 @@ function contestants(rows) {
       h("td", {}, c.left ? pill(`left: ${c.left}`, "", null, "Why it is no longer playing.") : pill("playing", "busy", "clock")))))));
 }
 
-function checks(rows) {
+function checks(rows, go) {
   if (!rows.length) return h("p", { class: "hint" }, "No check has been posted yet.");
   return h("div", { class: "table-wrap" }, h("table", { "data-test": "arena-checks" },
-    h("thead", {}, h("tr", {}, ["When", "Contestant", "What", "Result", "Why", "Id"].map((t) => h("th", {}, t)))),
+    h("thead", {}, h("tr", {}, ["When", "Contestant", "What", "Result", "Why", "Id", ""].map((t) => h("th", {}, t)))),
     h("tbody", {}, rows.map((r) => h("tr", {},
       h("td", { class: "hint" }, when(r.time)),
       h("td", {}, `${r.contestant}`, h("span", { class: "hint" }, ` · turn ${r.turn}${r.action === "submit" ? " · tried to enter" : ""}`)),
       h("td", { class: "mono" }, r.what),
       h("td", {}, r.ok ? pill("Passed", "good", "check") : pill("Failed", "bad", "x")),
       h("td", { class: "hint reason" }, r.ok ? "" : r.outcome.replace(/^FAILED at the /, "at the ")),
-      h("td", { class: "mono hint" }, r.id))))));
+      h("td", { class: "mono hint" }, r.id),
+      h("td", { class: "actions" }, openButtons(go, "check", r.id)))))));
 }
 
-function entries(rows) {
+function entries(rows, go) {
   if (!rows.length) return h("p", { class: "hint" }, "Nobody has had a timed run yet.");
   return h("div", { class: "table-wrap" }, h("table", { "data-test": "arena-entries" },
-    h("thead", {}, h("tr", {}, ["When", "Contestant", "What", "Speedup", "Kind", "Note"].map((t, i) => h("th", { class: i === 3 ? "num" : "" }, t)))),
+    h("thead", {}, h("tr", {}, ["When", "Contestant", "What", "Speedup", "Kind", "Note", ""].map((t, i) => h("th", { class: i === 3 ? "num" : "" }, t)))),
     h("tbody", {}, rows.map((e) => h("tr", {},
       h("td", { class: "hint" }, when(e.time)),
       h("td", {}, e.contestant),
       h("td", { class: "mono" }, e.what),
       h("td", { class: "num" }, e.speedup === null || e.speedup === undefined ? "–" : `${num(e.speedup, 3)}×`),
       h("td", {}, e.klass),
-      h("td", { class: "hint reason" }, e.note))))));
+      h("td", { class: "hint reason" }, e.note),
+      h("td", { class: "actions" }, (e.entry_ids || []).length ? openButtons(go, "entry", e.entry_ids[0]) : null))))));
 }
 
 function tiles(o) {

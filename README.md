@@ -29,7 +29,8 @@ Five screens, in the order you use them:
   on every other scene (choosing one from another scene moves Studio to it), recorded by anyone (a contest, a search, a person): an entry that keeps the answer and is faster at every world count it was
   measured at, with a timing that can be trusted. Choose one and run it like your own. An entry whose source only an agent contest
   holds is saved as a kernel of yours (`win-...`, visible in Build) and runs the way a kernel you wrote does. With nothing recorded
-  that beats the reference the list says so.
+  that beats the reference the list says so. *Edit in Build*, under the list, opens the experiment that is selected (a win, an
+  example, a saved one), not whatever was in the editor.
 - **Build**: three workspaces. *Choose stages* shows each place in the physics step with the reference or an
   alternative for it, its settings, and what kind of change it is (same answer, close answer, changes the physics,
   read-only). Two cards above them measure on a scene, in a worker on your GPU: *Where a change could pay* (how much of the step each
@@ -40,13 +41,18 @@ Five screens, in the order you use them:
 - **Results**: the leaderboard, grouped so only like is compared with like, with the best trade-offs marked and the trust
   level of every row (a row can be re-run here and compared with what was recorded), and a history of everything that
   ran. Opening a past watched run replays its saved stream. The leaderboard looks again every few seconds while it is on
-  screen, so entries recorded from outside the page (a contest in a terminal) appear without a click.
+  screen, so entries recorded from outside the page (a contest in a terminal) appear without a click. Every row has
+  **Test in Studio**, which opens that entry in Studio with its scene, the world counts it was timed at and the steps filled in (it
+  is not only for wins: an entry that lost can be watched too; nothing runs until you press Run comparison), and **View in Build**,
+  which puts its graph in the editor and, if it is an agent's code, its source in the kernel pane (saved as a kernel of yours,
+  `entry-...`).
 - **Research**: what an agent run by [phost-agent](https://github.com/cdevingo-bd/phost-agent) has done on this machine, read from
   its journal in the state directory: where proposals stopped (a funnel from *proposed* to *a win*), how many were answered from the
   memo without running anything, the device time and tokens spent, the latest attempts and finished searches, who holds each device,
   and whether the journal's hash chain is intact. If a contest has been started with `phost-agent arena`, an **Arena** panel leads
   the page: who is in it and what each has done, every check posted (passed or failed, and why), and every entry. A contest with
-  no end recorded shows as running, or as quiet once nothing has been written for ten minutes. It only reads: start a search with
+  no end recorded shows as running, or as quiet once nothing has been written for ten minutes. Each entry and each check has the same
+  two buttons, so a check that was never timed can be opened and tried too. It only reads: start a search with
   `phost-agent run`. Needs `pip install phost-agent`
   (`phost-dash[research]`) and says so when it is missing.
 - **Guide**: what the words mean and what the numbers are worth.

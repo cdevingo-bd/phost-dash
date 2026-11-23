@@ -2,9 +2,10 @@ import { get } from "./api.js";
 import { $, h, clear, num } from "./dom.js";
 import { icon } from "./icons.js";
 import { pill } from "./ui.js";
-import { state, refreshCatalog, refreshSaved } from "./state.js";
-import { mountStudio, openJob, showRun } from "./studio.js";
-import { mountBuild } from "./build.js";
+import { state, refreshCatalog, refreshSaved, setGraph } from "./state.js";
+import { mountStudio, openJob, showRun, prefillStudio } from "./studio.js";
+import { mountBuild, openInBuild } from "./build.js";
+import { kernelsIn } from "./agent.js";
 import { mountResults } from "./results.js";
 import { mountResearch } from "./research.js";
 import { mountHelp } from "./help.js";
@@ -89,7 +90,26 @@ async function boot() {
     show("studio");
     return;
   }
-  const go = { show, openLive: (id) => { show("studio"); openJob(id); }, showRun: (id) => { show("studio"); showRun(id); } };
+  const go = {
+    show, openLive: (id) => { show("studio"); openJob(id); }, showRun: (id) => { show("studio"); showRun(id); },
+    // a graph you were looking at (a win, an example, a replay) becomes what Build edits; the kernels it names are opened there
+    async toBuild(graph, origin = null) {
+      await refreshCatalog();                       // a kernel saved while it was fetched is an implementation now
+      setGraph(JSON.parse(JSON.stringify(graph)));
+      show("build");
+      openInBuild(kernelsIn(graph), origin);
+    },
+    // what an agent made, from a leaderboard row, an arena entry or an arena check: the graph, the scene, the world counts
+    async openAgent(kind, id, target) {
+      const out = await get(`/api/open/${kind}/${encodeURIComponent(id)}`);
+      await refreshCatalog();
+      setGraph(out.graph);
+      if (target === "build") { show("build"); openInBuild(kernelsIn(out.graph), out); }
+      else { show("studio"); prefillStudio(out); }
+      return out;
+    },
+    prefillStudio: (out) => { show("studio"); prefillStudio(out); },
+  };
   mounted.studio = mountStudio($("#tab-studio"), go);
   mounted.build = mountBuild($("#tab-build"), go);
   mounted.results = mountResults($("#tab-results"), go);
